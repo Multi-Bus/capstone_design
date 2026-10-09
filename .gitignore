@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+eeprom.bin
+mav.parm
+mav.tlog*
+logs/*.BIN
+terrain/
