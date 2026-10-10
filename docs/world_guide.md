@@ -3,7 +3,7 @@
 ## 월드 파일
 - `worlds/room.sdf` (8m x 8m x 3m, 벽 두께 0.2m, 지붕 없음)
 - 북쪽 벽(y=+4)에 문: x -0.5~0.5, 높이 2m
-- 실행: `gz sim -v4 -r ~/capstone_sim/worlds/room.sdf`
+- 실행: `gz sim -v4 -r ~/drone_project/worlds/room.sdf`
 
 ## 구조물 추가 방법
 1. `room.sdf`의 `</world>` 바로 위에 아래 모델을 붙여 넣는다.

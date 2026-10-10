@@ -1,0 +1,10 @@
+2026-10-11T00:24:12+09:00
+Distributor ID:	Ubuntu
+Description:	Ubuntu 24.04.5 LTS
+Release:	24.04
+Codename:	noble
+Linux BOOK-KFKM9C0HO6 6.18.40.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Fri Jul 31 22:12:15 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+8.15.0
+d67add0b9b65aaed713357d91c95b0d2e8568982
+082a0fe231f6e63bc8d1598f1cba461d9e2ea7f5
+Python 3.12.3

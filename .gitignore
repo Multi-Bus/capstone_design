@@ -5,3 +5,5 @@ mav.parm
 mav.tlog*
 logs/*.BIN
 terrain/
+runs/
+env.sh
