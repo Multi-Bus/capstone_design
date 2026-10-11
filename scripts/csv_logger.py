@@ -60,6 +60,7 @@ def main(argv=None, estimate_source=stub_estimate):
     ap.add_argument("--out", required=True)
     ap.add_argument("--duration", type=float, default=20.0, help="시뮬 시간 초")
     ap.add_argument("--run-id", default=time.strftime("run_%Y%m%d_%H%M%S"))
+    ap.add_argument("--no-data-timeout", type=float, default=NO_DATA_TIMEOUT_S, help="호스트 초, 새 시뮬 시각 없이 이 시간이 지나면 종료 (기본 10)")
     a = ap.parse_args(argv)
 
     truth = Truth(a.world)
@@ -76,7 +77,7 @@ def main(argv=None, estimate_source=stub_estimate):
             t = max(ts) if ts else None
             if t is not None and t > last_t:
                 last_t, last_new = t, time.monotonic()
-            elif time.monotonic() - last_new > NO_DATA_TIMEOUT_S:
+            elif time.monotonic() - last_new > a.no_data_timeout:
                 print("새 시뮬 시각 없음, 종료")
                 break
             if t is None or (next_t is not None and t < next_t - 1e-9):
