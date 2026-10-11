@@ -79,6 +79,9 @@ try:
             fx, fy, q = st["last"]
             print(f"  flow n={st['n_flow']} range n={st['n_range']} 최근 fx={fx:+.3f} fy={fy:+.3f} rad/s q={q} "
                   f"거리={st['range_m']}", flush=True)
-        time.sleep(1)
+        # udpin은 상대(MAVProxy) 주소를 수신한 패킷에서 배우므로, 읽지 않으면 송신이 전부 버려진다(TCP는 무관)
+        end = time.time() + 1
+        while time.time() < end:
+            link.recv_match(blocking=True, timeout=0.2)
 except KeyboardInterrupt:
     pass
