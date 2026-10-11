@@ -7,3 +7,4 @@ logs/*.BIN
 terrain/
 runs/
 env.sh
+models/generated/
