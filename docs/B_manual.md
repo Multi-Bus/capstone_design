@@ -15,7 +15,9 @@
 | 센서 모듈: `front_camera`, `down_camera`, `down_range` | 완료 |
 | 실제 위치 읽기 `get_truth` | 완료 |
 | 광류 계산 + MAVLink 브리지(`sensor_bridge.py`), GPS OFF 광류 비행 점검 | 직접 TCP 연결(7.1~7.4절)과 MAVProxy 경로(7.5절, A 가이드 방식) 모두 확인 |
-| 다중 드론 스폰, CSV 로거와 시야 판정 | 완료(10.1, 10.2절). 다중 드론 GPS OFF 비행은 미시험 |
+| 다중 드론 스폰, CSV 로거와 시야 판정 | 완료(10.1, 10.2절) |
+| 2대 GPS OFF 광류 비행 (A 가이드 §12 연결) | 완료(10.4절) |
+| Gazebo·SITL 시간 정렬 | 완료(10.5절) |
 | 2대 스침 시험 | 완료(10.3절). GPS ON, 회피 없음 |
 
 파일 소유 규칙은 다음과 같다. 본체 SDF와 ArduPilot 파라미터는 A만 수정하고, 월드와 센서 모듈은 B만 수정한다. 센서는 별도 모델로 제공하고 A가 본체에 붙인다.
@@ -302,7 +304,7 @@ gz service -s /world/room/create --reqtype gz.msgs.EntityFactory --reptype gz.ms
 
 - A 가이드의 기준은 90°다. 이 스크립트를 쓰고 난 뒤 파일에는 마지막으로 준 값이 남는다. 시험으로 값을 바꿨으면 끝나고 `set_fov.sh 90`으로 되돌린다(2026-10-11에 60° 시험 값이 커밋돼 있던 것을 90°로 되돌렸다).
 - 이미 떠 있는 모델은 FOV 변경을 다시 읽지 않는다. 모델을 삭제하고 다시 스폰한다.
-- 기체에는 fixed joint로 붙여야 한다. 장착 위치 권장값 (0.1, 0, 0.05) m와 규칙은 `docs/front_camera_spec.md`에 있다. 장착은 A가 한다. 기본 iris에 붙이는 고정 조인트 시험은 아직 하지 않았다 [미확인].
+- 기체에는 fixed joint로 붙여야 한다. 장착 위치 권장값 (0.1, 0, 0.05) m와 규칙은 `docs/front_camera_spec.md`에 있다. 장착은 A가 한다. B 쪽 시험에서는 `spawn_drones.py`가 fixed joint로 붙인다(10.1절). 스폰한 드론에서 정면이 기체 +x 방향이고 영상이 위아래 바른 것을 확인했다: yaw 0, 빨간 상자 (+2, 0)은 중심 열 319.5, (+2, +1)은 144.3(왼쪽), (+2, −1)은 494.7(오른쪽), 뒤(−2, 0)는 안 보임. yaw 90°에서도 (0, +2)가 중앙이었다.
 
 단독 시험은 다음처럼 한다(스폰 위치 `0 -5 1.5`, yaw 1.5708, 북쪽을 봄).
 
@@ -628,7 +630,7 @@ python3 scripts/spawn_drones.py 0 1 --world room --gen-only              # SDF�
 
 한계: 드론 1의 이동 1.72m는 명령 속도 × 시간(0.5 × 6 = 3m)보다 작다. 가속과 감속 구간이 포함된 것으로 보이지만 원인은 분석하지 않았다 [미확인].
 
-[미확인]: 드론 0과 3대 이상 동시 비행, 다중 드론 GPS OFF 비행, 드론마다 브리지를 붙여 2대 이상이 광류를 동시에 보내는 경우.
+드론 0, 1 동시 비행과 드론별 브리지 2개로 GPS OFF 비행은 10.3, 10.4절에서 확인했다. [미확인]: 3대 이상 동시 비행.
 
 ### 10.2 CSV 로거와 시야 판정
 
@@ -721,7 +723,61 @@ IDS="2 3" PART=agentD RUN=agentD scripts/run_pass_check.sh   # 다른 id, 다른
 - Windows에서 `\\wsl$` 경로로 스크립트를 편집하면 실행 권한이 빠질 수 있다. `Permission denied`가 나면 `chmod +x scripts/run_pass_check.sh`.
 - yaw는 비행 중 변하지 않는다고 가정했다(드론 2, 3 실행에서 별도 샘플러로 0, π 유지 확인). yaw가 바뀌는 경우는 시험하지 않았다.
 
-[미확인]: 반복 실행 재현성, GPS OFF 광류 2대 비행, 시뮬/실시간 배율.
+재현성: 같은 조건으로 3번 돌려 결과가 거의 같았다(위 표). GPS OFF 2대 비행은 10.4절.
+
+### 10.4 2대 GPS OFF 광류 비행 (A 가이드 §12 연결)
+
+A 가이드 §12의 연결을 그대로 쓴다. 드론 0, 1에 SITL과 MAVProxy를 하나씩 띄우고 드론마다 브리지를 붙인다. 두 기체 모두 `config/flow_test.parm`(GPS 끔)이다.
+
+| 드론 | sysid | 제어 UDP | 브리지 UDP | 브리지 토픽 |
+|---|---|---|---|---|
+| 0 | 1 | 14550 | 15550 | `/drone_0/down_camera/image`, `/drone_0/down_range/scan` |
+| 1 | 2 | 14560 | 15560 | `/drone_1/down_camera/image`, `/drone_1/down_range/scan` |
+
+```bash
+cd ~/drone_project
+bash scripts/run_two_flow_check.sh            # 환경변수: PART(기본 agentM), RUN(기본 agentM), LOGD(기본 /tmp/agentM/$RUN)
+```
+
+`scripts/two_flow_check.py` 순서: heartbeat sysid 확인 → EKF 상태 플래그에 상대 위치(0x08)가 켜질 때까지 대기 → GUIDED, arm, 2m 이륙 → A: 둘 다 20초 정지 → B: 드론 0만 동쪽 1.5m(0.3m/s), 드론 1은 정지 → C: 드론 1만 동쪽 1.5m, 드론 0은 정지 → LAND. 제어는 추정 위치만 쓰고 실제 위치는 판정에만 쓴다. `fusing optical flow` 메시지는 EKF 초기화 때 한 번만 나와서 스크립트가 붙기 전에 지나가므로, 끝난 뒤 MAVProxy `mav.tlog`에서 읽어 출력한다.
+
+결과(2026-10-11, 2회, 실제 이동 xy):
+
+| 실행 | A 정지 최대 (0 / 1) | B 드론 0 이동 / 드론 1 최대 | C 드론 1 이동 / 드론 0 최대 | 움직인 드론 추정−실제 차 |
+|---|---|---|---|---|
+| 1회 | 0.028 / 0.015 m | 1.501 / 0.007 m | 1.497 / 0.022 m | 0.007 / 0.011 m |
+| 2회 | 0.015 / 0.016 m | 1.489 / 0.016 m | 1.491 / 0.029 m | 0.020 / 0.004 m |
+
+- 두 SITL 모두 `EKF3 IMU0 fusing optical flow`, `started relative aiding`이 나왔다. EKF 플래그 `0x37f`.
+- 브리지 송신: 드론마다 약 1900건(`flow n=1902`, `1912` 등).
+- 추정 메시지 송신자 sysid 불일치 0건, failsafe 없음, GUIDED 유지, 두 기체 착륙 후 disarm. 남은 프로세스 없음.
+- 한 드론에만 보낸 명령이 다른 드론을 움직이지 않는다(정지 드론 최대 0.03m 이하).
+
+한계: 이륙 확인 시점 추정 고도는 1.84~1.92m(목표 2m, 판정 기준 1.8m). 바람·센서 잡음 없는 시뮬레이션이다.
+
+### 10.5 시간 정렬 (Gazebo 시각과 SITL 시각)
+
+A 가이드 §4는 시간 정렬을 B 로거가 맡는다고 정했다. `scripts/time_sync_check.py`(드론 5, 지상, 격리 파티션)로 쟀다.
+
+| 상황 | 결과 |
+|---|---|
+| 시작 60초 | offset = sim − `time_boot_ms`/1000 평균 0.0006 s, 범위 ±0.010 s(표본 간격 수준), 기울기 0.9997 |
+| Gazebo 15초 일시정지 | SITL `time_boot_ms`가 멈추고(37734 유지) HEARTBEAT도 끊김. 재개 후 offset 변화 +0.0018 s |
+| SITL만 재시작 | `time_boot_ms`가 0으로 돌아가지 않고 Gazebo 시각에서 이어짐(43300, sim 43.297) |
+
+JSON 모델에서는 SITL이 Gazebo가 보내는 시각으로 진행하므로 두 시계가 같다. 규칙:
+
+- `sim_s = time_boot_ms/1000 + offset`. offset은 실행 시작 때 재고, SITL을 다시 띄우면 다시 잰다(이번 측정에서는 약 0).
+- `time_boot_ms`를 호스트 시간으로 쓰지 않는다. 이 PC에서 시뮬레이션은 실시간의 약 0.4~0.55배로 돈다.
+- CSV에는 `time_sim_s`와 `estimate_time_boot_ms`를 둘 다 남긴다(계약에 이미 있음).
+
+로거 일시정지: `csv_logger.py`는 호스트 시간으로 10초 동안 새 시뮬 시각이 없으면 끝난다. 일시정지가 길면 `--no-data-timeout`을 준다.
+
+```bash
+python3 csv_logger.py --ids 5 --world room --out ../logs/out.csv --duration 30 --no-data-timeout 30
+```
+
+시험(SITL 실행 중, 로거 시작 10초 뒤 15초 일시정지): 기본값은 일시정지 중 "새 시뮬 시각 없음, 종료"로 37행에서 끝났고, `--no-data-timeout 30`은 300행(sim 12.02~41.92 s, 최대 간격 0.108 s)을 끝까지 썼다. 일시정지 동안 시뮬 시각도 멈추므로 기록에 빈 구간이 생기지 않는다. 로거 시작 직후(약 5초 안)에 일시정지하면 첫 데이터를 받기 전이라 0행으로 끝날 수 있다.
 
 ## 부록: 이 문서에서 [미확인]으로 남긴 항목 모음
 
@@ -729,13 +785,13 @@ IDS="2 3" PART=agentD RUN=agentD scripts/run_pass_check.sh   # 다른 id, 다른
 - 저장소를 다른 PC로 옮기는 방법
 - 3.3절 전체 SITL 명령(`-I0 --sysid 1 ... --add-param-file ... --console`)의 단일 실행 결과, `python3`로 `sim_vehicle.py` 실행 가능 여부
 - 3.2절 기본 iris 스폰 문자열(`<name>` 포함 형태)의 그대로 실행 여부
-- `front_camera`를 기본 iris에 붙이는 고정 조인트 시험, 정면이 +x인지 확인
 - `GZ_IP=127.0.0.1`의 효과
 - 12m 방의 공 충돌 결과 (바닥 무늬는 카메라 영상과 GUI에서 확인됨)
 - GUI 환경에서 `down_camera` 프레임 주기 (헤드리스 약 18Hz, 설정 30Hz)
 - MAVProxy 사용 시 TCP 5762 이용 가능 여부
 - 광류 장기 드리프트·정확도, 센서 잡음과 기체 기울기 상황
 - `land` 입력 후 모드 표시가 GUIDED로 남는 이유
-- 10.1: 드론 0과 3대 이상 동시 비행, 다중 드론 GPS OFF 비행, 드론마다 브리지를 붙여 2대 이상이 광류를 동시에 보내는 경우, 드론 1 이동 1.72m(명령 3m)의 원인
+- 10.1: 3대 이상 동시 비행, 드론 1 이동 1.72m(명령 3m)의 원인
 - 10.2: 추정 칸을 A의 `get_estimate`로 채우는 경로, yaw가 바뀌는 상황의 시야 판정
-- 10.3: 반복 실행 재현성, GPS OFF 광류 2대 비행, 시뮬/실시간 배율
+- 10.3: yaw가 바뀌는 비행에서의 시야 판정
+- 10.4, 10.5: 기체 기울기가 큰 비행, 실제 offset(실제−추정) 기록을 누가 할지(A와 합의)
