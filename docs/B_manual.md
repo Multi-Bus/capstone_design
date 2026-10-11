@@ -3,7 +3,7 @@
 이 문서는 B 담당 영역을 처음 하는 사람이 순서대로 따라 할 수 있게 정리한 초안이다. 작업 기록(`B_작업기록.md`)과 `~/drone_project`의 실제 파일에서 확인된 내용만 적었다.
 
 - 표기: [미확인]은 아직 확인하지 못한 항목이다. 명령 앞의 `PowerShell`, `Ubuntu`, `MAVProxy`는 입력하는 곳이다.
-- 작성 시점: 2026-10-11. 2대 스침 시험은 10장에 자리만 있다.
+- 작성 시점: 2026-10-11.
 
 ## 1. 개요
 
@@ -16,7 +16,7 @@
 | 실제 위치 읽기 `get_truth` | 완료 |
 | 광류 계산 + MAVLink 브리지(`sensor_bridge.py`), GPS OFF 광류 비행 점검 | 직접 TCP 연결(7.1~7.4절)과 MAVProxy 경로(7.5절, A 가이드 방식) 모두 확인 |
 | 다중 드론 스폰, CSV 로거와 시야 판정 | 완료(10.1, 10.2절). 다중 드론 GPS OFF 비행은 미시험 |
-| 2대 스침 시험 | 작성 예정(10장) |
+| 2대 스침 시험 | 완료(10.3절). GPS ON, 회피 없음 |
 
 파일 소유 규칙은 다음과 같다. 본체 SDF와 ArduPilot 파라미터는 A만 수정하고, 월드와 센서 모듈은 B만 수정한다. 센서는 별도 모델로 제공하고 A가 본체에 붙인다.
 
@@ -673,7 +673,55 @@ python3 csv_logger.py --ids 0 1 --world room --out ../logs/out.csv --duration 20
 
 ### 10.3 2대 스침 시험
 
-작성 예정.
+두 드론이 평행한 차선에서 서로 반대 방향으로 날아 스쳐 지나간다. 회피 알고리즘은 없다. 목적은 2대 동시 비행, 드론별 명령 분리, CSV 로거와 `visible_ids` 전환을 한 번에 확인하는 것이다. GPS는 켠 상태다(`config/frame.parm`만 사용).
+
+| 항목 | 값 |
+|---|---|
+| 첫째 id | (-4, -0.75, 0.2), yaw 0. 동쪽(+x)으로 이동 |
+| 둘째 id | (4, +0.75, 0.2), yaw π. 서쪽(-x)으로 이동 |
+| 차선 간격 | 1.5m (y) |
+| 고도, 속도, 이동 거리 | 2m, 0.5m/s, 각자 8m |
+| 이동 종료 판정 | 시간이 아니라 `LOCAL_POSITION_NED` 시작 대비 이동량 |
+| 차선·고도 유지 | P 제어 (차선 게인 0.5, 최대 0.2m/s / 고도 게인 0.5, 최대 0.3m/s) |
+| SITL 연결 | `--no-mavproxy`, TCP 5760+10·id |
+
+`scripts/run_pass_check.sh`가 한 번에 실행한다. 헤드리스 Gazebo(격리 파티션), `spawn_drones.py`로 두 드론 스폰, SITL 2개, `pass_check.py`, `csv_logger.py` 순서다. `pass_check.py`는 두 드론이 모두 arm된 뒤 이륙 직전에 `LOG_START`를 출력하고, 그때 로거가 시작해 시뮬 시간 70초(`DUR`)를 기록한다. 끝나면 자기 프로세스 그룹만 종료한다.
+
+```bash
+cd ~/drone_project
+scripts/run_pass_check.sh                                    # 드론 0, 1, 결과 /tmp/pass_check/pass_check.csv
+IDS="2 3" PART=agentD RUN=agentD scripts/run_pass_check.sh   # 다른 id, 다른 파티션
+```
+
+환경변수: `IDS`(기본 "0 1"), `PART`(gz 파티션, 기본 `pass_check`), `RUN`(`runs/<RUN>_<id>` 실행 폴더), `LOGD`(로그 폴더, 기본 `/tmp/$RUN`), `OUT`(CSV, 기본 `$LOGD/pass_check.csv`), `DUR`(로그 시뮬 초, 기본 70). `pass_check.py`는 `--speed`(최대 0.5), `--dist`, `--alt`를 받는다.
+
+성공 기준:
+
+- `pass_check.log` 끝에 `DONE`, 종료코드 0, `착륙 후 armed: {..: False, ..: False}`
+- SITL 로그에 `no JSON`, `failsafe`, `PreArm`이 없음 (스크립트가 `== SITL 메시지` 아래에 출력)
+- CSV에서 각 드론의 `visible_ids`가 `[상대]` → `[]`로 한 번 바뀜
+
+예상 전환 위치: 카메라가 본체 앞 0.1m이고 수평 FOV ±45°이므로, 카메라에서 상대까지 앞쪽 거리가 차선 간격 1.5m보다 작아지면 시야에서 빠진다. 두 드론의 x 간격으로 약 1.6m, 각자 x ≈ ∓0.8m다. 시작할 때는 거리 약 8.1m로 10m 이내라서 서로 보인다.
+
+결과(2026-10-11):
+
+| 실행 | 이동 | 전환 시점 x | 최소 거리 | `visible_ids` 재계산 불일치 |
+|---|---|---|---|---|
+| 드론 2, 3 (`logs/pass_check_sample.csv`) | 8.30m, 8.34m | ∓0.77 (간격 1.54) | 1.493m | 0 / 1402행 |
+| 드론 0, 1 (1차) | 8.32m, 8.33m | ∓0.80 (간격 1.60) | 1.497m | 0 / 1400행 |
+| 드론 0, 1 (2차, 수정 후) | 8.31m, 8.37m | ∓0.79 (간격 1.58) | 1.494m | 0 / 1400행 |
+
+- 두 드론 모두 최대 고도 2.23m, 마지막 z 0.19(착륙)였다. 벽 안쪽(|x| ≤ 4.38m)에서 끝났다.
+- 재계산은 CSV의 truth 위치와 스폰 yaw(0, π)로 `visibility.py`를 직접 호출해 비교했다. 같은 함수를 쓰므로 로거가 함수를 올바르게 부르는지 확인한 것이고, 판정 기준 자체의 검증은 아니다.
+- 추정 칸은 stub이라 빈칸이다(10.2절).
+
+주의:
+
+- 드론 0, 1 1차 실행에서 두 가지 문제가 나와서 고쳤다. `csv_logger.py`가 CSV를 다 쓴 뒤 종료할 때 `Segmentation fault`를 냈다(gz.transport 정리 문제로 보임. `os._exit(0)`으로 종료하게 바꿈). gz 서버가 SIGTERM에 끝나지 않고 남았다(`run_pass_check.sh`에 `kill -9` 추가). 수정 후 2차 실행에서는 segfault와 남은 프로세스가 없었다.
+- Windows에서 `\\wsl$` 경로로 스크립트를 편집하면 실행 권한이 빠질 수 있다. `Permission denied`가 나면 `chmod +x scripts/run_pass_check.sh`.
+- yaw는 비행 중 변하지 않는다고 가정했다(드론 2, 3 실행에서 별도 샘플러로 0, π 유지 확인). yaw가 바뀌는 경우는 시험하지 않았다.
+
+[미확인]: 반복 실행 재현성, GPS OFF 광류 2대 비행, 시뮬/실시간 배율.
 
 ## 부록: 이 문서에서 [미확인]으로 남긴 항목 모음
 
@@ -690,3 +738,4 @@ python3 csv_logger.py --ids 0 1 --world room --out ../logs/out.csv --duration 20
 - `land` 입력 후 모드 표시가 GUIDED로 남는 이유
 - 10.1: 드론 0과 3대 이상 동시 비행, 다중 드론 GPS OFF 비행, 드론마다 브리지를 붙여 2대 이상이 광류를 동시에 보내는 경우, 드론 1 이동 1.72m(명령 3m)의 원인
 - 10.2: 추정 칸을 A의 `get_estimate`로 채우는 경로, yaw가 바뀌는 상황의 시야 판정
+- 10.3: 반복 실행 재현성, GPS OFF 광류 2대 비행, 시뮬/실시간 배율

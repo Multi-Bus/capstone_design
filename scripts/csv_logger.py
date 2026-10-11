@@ -8,7 +8,7 @@
   uncertainty_valid=false, uncertainty_source=unavailable. A의 get_estimate가 오면 main()에 넘기면 된다.
 - 값 없음은 빈칸. 불확실성은 0으로 채우지 않는다.
 """
-import argparse, csv, json, time
+import argparse, csv, json, os, sys, time
 from get_truth import Truth
 from visibility import visible_drones
 
@@ -100,3 +100,6 @@ def main(argv=None, estimate_source=stub_estimate):
 
 if __name__ == "__main__":
     main()
+    # gz.transport 구독이 남은 채 인터프리터가 정리되면 종료 시 Segmentation fault가 난다(CSV는 이미 닫힘)
+    sys.stdout.flush()
+    os._exit(0)
