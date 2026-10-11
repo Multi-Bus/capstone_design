@@ -9,6 +9,8 @@
       <visual name="visual">
         <geometry><plane><normal>0 0 1</normal><size>12.4 12.4</size></plane></geometry>
         <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
           <pbr>
             <metal>
               <albedo_map>model://floor/materials/textures/floor.png</albedo_map>

@@ -1,9 +1,10 @@
 # 방 월드와 구조물 설치 가이드
 
 ## 월드 파일
-- `worlds/room.sdf` (8m x 8m x 3m, 벽 두께 0.2m, 지붕 없음)
-- 북쪽 벽(y=+4)에 문: x -0.5~0.5, 높이 2m
-- 실행: `gz sim -v4 -r ~/drone_project/worlds/room.sdf`
+- `worlds/room.sdf` (12m x 12m x 5m, 벽 두께 0.2m, 지붕 없음)
+- 북쪽 벽(y=+6)에 문: x -0.5~0.5, 높이 2m
+- 바닥: `models/floor` (광류용 랜덤 흑백 무늬 텍스처, `model://floor`)
+- 실행: `source ~/drone_project/env.sh` 후 `gz sim -v4 -r ~/drone_project/worlds/room.sdf`
 
 ## 구조물 추가 방법
 1. `room.sdf`의 `</world>` 바로 위에 아래 모델을 붙여 넣는다.
@@ -13,7 +14,9 @@
           <pose>1 1 0.5 0 0 0</pose>
           <link name="link">
             <collision name="collision"><geometry><box><size>1 1 1</size></box></geometry></collision>
-            <visual name="visual"><geometry><box><size>1 1 1</size></box></geometry></visual>
+            <visual name="visual"><geometry><box><size>1 1 1</size></box></geometry>
+              <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.7 0.7 0.7 1</diffuse></material>
+            </visual>
           </link>
         </model>
 
@@ -21,17 +24,20 @@
 3. `<size>`는 `가로(x) 세로(y) 높이(z)`이다.
 4. `<collision>`과 `<visual>`을 둘 다 넣는다. visual만 있으면 보이기만 하고 통과된다.
 5. 모델 이름(`name`)은 월드 안에서 겹치면 안 된다.
+6. `<visual>`에 `<material>`(ambient, diffuse)을 반드시 넣는다. 재질을 빼면 카메라 센서 영상에서 검게 나온다(아래 주의 참고).
 
 ## 문이 있는 벽
-- 벽 하나를 box 3개로 나눈다 (왼쪽 3.5m, 오른쪽 3.5m, 문 위 1m x 1m). 구멍을 파는 기능은 쓰지 않는다.
+- 벽 하나를 box 3개로 나눈다 (왼쪽 5.5m, 오른쪽 5.5m, 문 위 1m x 3m). 구멍을 파는 기능은 쓰지 않는다.
 
 ## 충돌 확인
 - Gazebo를 켠 상태에서 공을 떨어뜨려 본다.
 
         gz service -s /world/room/create --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 3000 --req 'sdf: "<sdf version=\"1.9\"><model name=\"ball\"><pose>0 0 2 0 0 0</pose><link name=\"l\"><collision name=\"c\"><geometry><sphere><radius>0.2</radius></sphere></geometry></collision><visual name=\"v\"><geometry><sphere><radius>0.2</radius></sphere></geometry></visual></link></model></sdf>"'
 
-- 바닥이나 벽 위에서 멈추면 충돌이 정상이다.
+- 바닥이나 벽 위(높이 5m)에서 멈추면 충돌이 정상이다.
 
 ## 주의
 - 월드에 시스템 플러그인(Physics, UserCommands, SceneBroadcaster, Imu, Sensors)이 모두 있어야 한다. Imu가 없으면 SITL에서 `no JSON sensor message received`가 난다.
-- iris 높이: 이륙 높이는 방 높이 3m 안으로 한다 (예: `takeoff 2`).
+- 이륙 높이는 방 높이 5m 안으로 한다 (예: `takeoff 2`).
+- 재질이 없는 visual과, `<pbr>`만 있고 `<ambient>`/`<diffuse>`가 없는 바닥은 카메라 센서 영상에서 검게 렌더링된다 (2026-10-11 확인). 벽과 바닥 모두 `<ambient>`와 `<diffuse>`를 넣는다.
+- `model://...` 모델은 `gz sim`이 `GZ_SIM_RESOURCE_PATH`로 찾는다. `gz sdf -k`로 문법만 검사할 때는 `SDF_PATH`를 같은 폴더로 지정해야 한다.
