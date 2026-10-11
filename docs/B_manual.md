@@ -3,7 +3,7 @@
 이 문서는 B 담당 영역을 처음 하는 사람이 순서대로 따라 할 수 있게 정리한 초안이다. 작업 기록(`B_작업기록.md`)과 `~/drone_project`의 실제 파일에서 확인된 내용만 적었다.
 
 - 표기: [미확인]은 아직 확인하지 못한 항목이다. 명령 앞의 `PowerShell`, `Ubuntu`, `MAVProxy`는 입력하는 곳이다.
-- 작성 시점: 2026-10-11. 다중 드론 스폰, CSV 로거, 2대 스침 시험은 10장에 자리만 있다.
+- 작성 시점: 2026-10-11. 2대 스침 시험은 10장에 자리만 있다.
 
 ## 1. 개요
 
@@ -14,8 +14,9 @@
 | 실내 방 월드(12m × 12m × 5m, 북쪽 벽에 문, 텍스처 바닥)와 구조물 추가 | 완료 |
 | 센서 모듈: `front_camera`, `down_camera`, `down_range` | 완료 |
 | 실제 위치 읽기 `get_truth` | 완료 |
-| 광류 계산 + MAVLink 브리지(`sensor_bridge.py`), GPS OFF 광류 비행 점검 | 직접 TCP 연결 구성에서 확인 |
-| 다중 드론 스폰, CSV 로거, 2대 스침 시험 | 작성 예정(10장) |
+| 광류 계산 + MAVLink 브리지(`sensor_bridge.py`), GPS OFF 광류 비행 점검 | 직접 TCP 연결(7.1~7.4절)과 MAVProxy 경로(7.5절, A 가이드 방식) 모두 확인 |
+| 다중 드론 스폰, CSV 로거와 시야 판정 | 완료(10.1, 10.2절). 다중 드론 GPS OFF 비행은 미시험 |
+| 2대 스침 시험 | 작성 예정(10장) |
 
 파일 소유 규칙은 다음과 같다. 본체 SDF와 ArduPilot 파라미터는 A만 수정하고, 월드와 센서 모듈은 B만 수정한다. 센서는 별도 모델로 제공하고 A가 본체에 붙인다.
 
@@ -388,7 +389,7 @@ tr.get(0, model_name="iris_flow_test")           # 이름을 직접 지정
 | `camera_yaw_enu_rad` | 기체 yaw와 같음 |
 | `valid` | 마지막 수신 후 0.5초 이내(호스트 시계)면 True |
 
-모델을 아직 받지 못했으면 `{"valid": False}`만 돌아온다. 오프셋은 `docs/front_camera_spec.md`와 같게 유지한다. 스폰 스크립트가 만들어지면 모델 이름을 `drone_{i}`로 맞춰서 `get(i)`가 그대로 동작하게 한다(작성 예정).
+모델을 아직 받지 못했으면 `{"valid": False}`만 돌아온다. 오프셋은 `docs/front_camera_spec.md`와 같게 유지한다. 스폰 스크립트(`spawn_drones.py`, 10.1절)가 모델 이름을 `drone_{i}`로 만들기 때문에 `get(i)`가 그대로 동작한다. 드론 3, 4를 스폰해 `get(3)`, `get(4)` 동작을 확인했다.
 
 ### 6.3 z 기준 (0.19)
 
@@ -417,7 +418,14 @@ source ~/drone_project/env.sh
 ~/venv-ardupilot/bin/python ~/drone_project/scripts/sensor_bridge.py --mav tcp:127.0.0.1:5762
 ```
 
-5762는 `--no-mavproxy`로 띄운 SITL의 TCP 포트다(비행 제어 스크립트는 5760). A 가이드의 연결 경로인 MAVProxy `--out=udp:127.0.0.1:15550`을 통한 주입은 시험하지 않았고, MAVProxy가 그 포트로 들어온 메시지를 SITL로 전달하는지도 [미확인]이다. MAVProxy를 같이 쓸 때 5762가 비어 있는지도 [미확인]이다.
+5762는 `--no-mavproxy`로 띄운 SITL의 TCP 포트다(비행 제어 스크립트는 5760). A 가이드의 연결 경로인 MAVProxy `--out=udp:127.0.0.1:15550`을 통한 주입은 7.5절에서 시험했다(브리지는 `--mav udpin:127.0.0.1:15550`). MAVProxy를 같이 쓸 때 TCP 5762가 비어 있는지는 확인하지 못했다 [미확인].
+
+다중 드론에서는 브리지를 드론마다 하나씩 띄우고 토픽과 연결 주소를 드론별로 준다(10.1절).
+
+```bash
+~/venv-ardupilot/bin/python ~/drone_project/scripts/sensor_bridge.py \
+  --cam /drone_1/down_camera/image --range /drone_1/down_range/scan --mav <드론 1의 MAVLink 주소>
+```
 
 ### 7.2 파라미터 (`config/flow_test.parm`)
 
@@ -472,6 +480,59 @@ scripts/run_flow_check.sh flow_test.parm            # 브리지 없이 (비교�
 - 시뮬레이션에 바람과 센서 잡음이 없다. 모션 블러, 기체 기울기가 있을 때의 정확도도 측정하지 않았다.
 - 첫 시험은 `optical_flow_send` 오류로 광류가 한 번도 전송되지 않았는데도 정지 비행에서 위치 변화가 없어서 구분이 안 되었다. 그래서 이동 구간을 넣었다. 브리지 로그의 `flow n=`이 증가하는지 꼭 확인한다.
 
+### 7.5 MAVProxy 경로 (A 가이드 방식)
+
+7.1~7.4절은 브리지가 SITL의 TCP 5762에 직접 붙었다. 이 절은 A 가이드와 같은 연결을 쓴다. SITL 출력을 MAVProxy가 두 UDP 포트로 나눠 보낸다. 제어 스크립트는 14550, 브리지는 15550에 붙는다.
+
+- 브리지: `--mav udpin:127.0.0.1:15550`
+- 제어: `udpin:127.0.0.1:14550`
+- SITL은 `--mavproxy-args=--daemon`으로 띄운다. MAVProxy 대화형 입력을 끈다는 뜻이다.
+- `--no-extra-ports`를 준다. `run_flow_check_mavproxy.sh` 주석대로 기본 `--out`(WSL2에서는 Windows 호스트로 간다)을 빼고 아래 두 `--out`만 쓴다.
+- `MAVPROXY_CMD`에 venv의 `mavproxy.py`를 넣는다. 같은 주석대로 sim_vehicle이 PATH에서 mavproxy.py를 찾기 때문이다.
+
+`scripts/run_flow_check_mavproxy.sh`가 위 과정을 한 번에 한다. 헤드리스 Gazebo(`GZ_PARTITION=$PART`)를 띄우고 `iris_flow_test`를 (-2, 0, 0.2)에 스폰한 뒤 SITL과 브리지를 올린다. 시험이 끝나면 세 프로세스 그룹만 끄고 남은 프로세스를 확인한다. 내 GUI Gazebo와 섞이지 않는다(8장).
+
+환경변수:
+
+| 변수 | 뜻 | 기본값 |
+|---|---|---|
+| `PART` | gz 파티션 | `agentA` |
+| `RUN` | `runs/` 아래 실행 폴더 이름 | `agentA` |
+| `INST` | SITL 인스턴스 번호. 제어 포트 14550+10·INST, 브리지 포트 15550+10·INST | 0 |
+| `LOGD` | 로그 폴더 | `/tmp/$RUN` |
+
+인자를 주지 않으면 `flow_accuracy_check.py --mav udpin:127.0.0.1:<제어 포트>`를 돈다. 인자를 주면 그 명령을 그대로 돈다. 시험은 `timeout 900`으로 15분 안에 끝나야 한다.
+
+```bash
+PART=verifyA RUN=verifyA INST=0 scripts/run_flow_check_mavproxy.sh ~/venv-ardupilot/bin/python scripts/flow_accuracy_check.py --mav udpin:127.0.0.1:14550 --hover-s 20 --out /tmp/acc.csv
+```
+
+`flow_accuracy_check.py`가 하는 일은 다음과 같다.
+
+1. EKF 준비, GUIDED 전환, arm, 이륙 2m를 한다.
+2. 8초(시뮬 시간) 안정화한 뒤 정지비행을 한다(기본 60초, `--hover-s`로 바꾼다).
+3. A 가이드 §14 정사각형을 돈다. 꼭짓점은 시작 추정 위치 기준 (2,0), (2,2), (0,2), (0,0)이다. 속도는 0.3m/s 이하, 꼭짓점 0.2m 안에 2초 유지, 구간마다 30초 제한이다.
+4. 착륙하고 CSV를 저장한다.
+
+제어는 추정 위치만 쓴다. 실제 위치(`get_truth`)는 평가에만 쓴다. 오차는 추정 − 실제 − offset이다. offset은 정지 상태의 평균 차이로, 정지비행은 첫 5초, 정사각형은 직전 마지막 3초에서 구한다.
+
+결과(모두 GPS 끔, MAVProxy 경로):
+
+| 측정 | 정사각형 RMSE xy | 정사각형 최대 xy | 정지비행 최대 xy |
+|---|---|---|---|
+| 1회차 (`results/flow_accuracy_20261011_200631.csv`) | 0.011 m | 0.021 m | 0.017 m (60초) |
+| 2회차 (`results/flow_accuracy_20261011_201418.csv`) | 0.022 m | 0.040 m | 0.020 m (60초) |
+| 재검증 (메인) | 0.012 m | 0.025 m | 0.018 m (20초) |
+
+재검증에서 확인한 내용은 다음과 같다.
+
+- SITL 로그에 `EKF3 IMU0 fusing optical flow`, `EKF3 IMU0 started relative aiding`이 나왔다.
+- 브리지가 15550으로 광류를 약 2700건 보냈다(`flow n=2699`).
+- 꼭짓점 4개를 모두 도달했다(구간 약 9초). failsafe는 없었다.
+- 시뮬/실시간 배율은 약 0.81이었다.
+
+한계: 시뮬레이션에 바람과 센서 잡음이 없어서 실제 기체보다 훨씬 좋게 나온다. 이 수치는 연결과 계산이 맞는지 확인하는 용도다. 실제 정확도로 해석하지 않는다.
+
 ## 8. 시험을 격리해서 돌리는 방법
 
 자동 시험이 내가 켜 둔 Gazebo GUI와 SITL을 건드리지 않게 하는 방법이다. `run_flow_check.sh`가 이 방식을 쓴다.
@@ -512,14 +573,107 @@ SITL은 `--no-mavproxy`로 띄우고 pymavlink가 TCP 5760에 붙는다(MAVProxy
 | `Arm: Accels inconsistent`가 약 1분 반복 | 시동 직후 센서 안정화 | 약 1분 뒤 풀린다. 시동 명령을 재시도 |
 | `optical_flow_send() takes from 9 to 10 positional arguments but 11 were given` | 기본 MAVLink 1에는 확장 필드(`flow_rate_x/y`)가 없음 | 코드 맨 위에서 `os.environ["MAVLINK20"] = "1"` 후 `pymavlink` import |
 | `fatal: not a git repository` (`git commit`) | 작업 폴더로 이동하지 않았거나 `git init`이 안 됨 | 작업 폴더로 이동하고 `git init` |
+| udpin 연결에서 브리지 송신이 MAVProxy에 전달되지 않음 | pymavlink `udpin`은 상대(MAVProxy) 주소를 수신한 패킷에서 알아내므로, 수신하지 않으면 송신이 버려진다(TCP는 무관) | 브리지 주 루프에서 `recv_match`로 계속 수신한다(`sensor_bridge.py`). 이 수신 루프를 빼면 안 된다 |
 
 참고: 세션 종류에 따라 `-w`(파라미터 초기화) 사용이 다르다. 작업 기록 3장은 FRAME_CLASS를 수동으로 설정하던 때 "`-w` 없이 실행해야 설정이 유지됨"이라고 적었고, `run_flow_check.sh`는 `-w`와 `--add-param-file`을 같이 쓴다(파라미터가 매번 파일에서 들어가므로 문제없다). 평소 실행 명령(3.3절)에는 `-w`를 넣지 않았다.
 
-## 10. 작성 예정
+## 10. 다중 드론, 로거, 스침 시험
 
-- 다중 드론 스폰: 작성 예정
-- CSV 로거: 작성 예정
-- 2대 스침 시험: 작성 예정
+### 10.1 다중 드론 스폰
+
+`scripts/spawn_drones.py`는 드론 i마다 SDF를 만들어 `/world/room/create`로 스폰한다. 원본 `iris_with_ardupilot`는 고치지 않고 복사한 뒤 모델 이름과 플러그인 포트만 바꾼다. 센서 세 개는 드론별 토픽을 가진 링크로 붙는다. 규칙은 `docs/multi_drone.md`와 스크립트를 따른다.
+
+| 항목 | 값 |
+|---|---|
+| 모델 이름 | `drone_{i}` |
+| 플러그인 `fdm_port_in` | `9002+10i` |
+| SITL | `-I{i} --sysid {i+1}`, TCP `5760+10i` |
+| 센서 토픽 | `/drone_{i}/front_camera/image`, `/drone_{i}/down_camera/image`, `/drone_{i}/down_range/scan` |
+| 기본 위치 (ENU, z=0.2, yaw 0) | 0:(-2,0), 1:(2,0) (A 가이드) / 2:(-2,3), 3:(2,3) / 4:(-2,-3), 5:(2,-3). 6 이상은 `--pos` 필수 |
+| 위치 제한 | 스폰 x, y는 |x|, |y| ≤ 5.5m (벽 ±6m에서 0.5m 안쪽). 기본 배치 간격은 최소 x 4m, y 3m |
+
+사용법은 `~/drone_project`에서 실행한다. 스폰에는 `gz.transport13`, `gz.msgs10`이 있는 python3를 쓴다. `--gen-only`는 SDF만 만들고 스폰하지 않으므로 gz 바인딩이 없어도 된다. 격리 시험은 `GZ_PARTITION`을 서버와 스크립트에 같게 준다(8장).
+
+```bash
+cd ~/drone_project
+source env.sh
+gz sim -s -r worlds/room.sdf &                       # 서버만 (또는 GUI)
+python3 scripts/spawn_drones.py 0 1                   # 기본 위치
+python3 scripts/spawn_drones.py 1 2 --pos 1=3,-2 --pos 2=-4,3,0.2,1.57   # ID=x,y[,z[,yaw]], ENU m / rad
+python3 scripts/spawn_drones.py 0 1 --world room --gen-only              # SDF만 생성
+```
+
+생성물은 `models/generated/drone_{i}/model.sdf`다. `.gitignore`에 `models/generated/`가 있어서 git에 올라가지 않는다. 센서는 `sensors/{front_camera,down_camera,down_range}/model.sdf`의 링크를 읽어 와 토픽만 드론별로 바꾼다. 각 링크는 `iris_with_standoffs::base_link`에 fixed 조인트(`*_joint`)로 고정한다. 모델 안에 `iris_with_standoffs`가 중첩되므로 조인트와 IMU 이름은 원본과 같은 `iris_with_standoffs::...`를 쓴다.
+
+| 센서 | 본체 기준 장착 pose (x y z r p y) | 수평 FOV |
+|---|---|---|
+| `front_camera` | 0.1 0 0.05 0 0 0 | 1.5708 rad (90°) |
+| `down_camera` | 0 0 -0.05 0 0 0 | 1.0472 rad (60°) |
+| `down_range` | 0 0 -0.05 0 0 0 | 해당 없음 |
+
+드론별 브리지는 토픽과 연결 주소를 드론마다 준다. `--mav`에는 그 드론의 MAVLink 연결 주소를 준다.
+
+```bash
+~/venv-ardupilot/bin/python ~/drone_project/scripts/sensor_bridge.py \
+  --cam /drone_1/down_camera/image --range /drone_1/down_range/scan --mav <드론 1의 MAVLink 주소>
+```
+
+검증 결과(2026-10-11):
+
+- 드론 3, 4: 포트 9032, 9042, 토픽 6개, 정면 FOV 1.5708, 하향 FOV 1.0472. `gz sdf -k`는 둘 다 Valid. 스폰 OK. 센서 6개가 모두 들어왔고 영상 픽셀 값이 정상이다. 지상에서 거리센서는 0.145m였다. `get_truth.get(3)`, `get(4)`가 동작했다.
+- 드론 1, 2: SITL 2개를 동시에 붙였다. `no JSON sensor message received`는 0건이었다. 둘 다 GUIDED, arm 후 `takeoff 2`로 z 0.19에서 2.19가 됐다.
+- 드론 1만 북쪽 0.5m/s로 6초 명령했다. drone_1은 Δy = +1.72m, drone_2는 0.00m였다. 명령이 드론별로 나뉘어 간다.
+- 호버 중 거리센서는 두 드론 모두 약 2.13~2.14m였다(지상 0.145m). 센서가 드론 고도를 따라가므로 본체에 고정됐다.
+- 이동 전후 하향 카메라 프레임 평균 절대차는 드론 1이 34.53, 드론 2가 6.73이었다. 정면 카메라는 벽 앞의 단색에 가까운 영상이라 차이가 0.00~0.01이어서 이동 증거로 쓸 수 없다.
+
+한계: 드론 1의 이동 1.72m는 명령 속도 × 시간(0.5 × 6 = 3m)보다 작다. 가속과 감속 구간이 포함된 것으로 보이지만 원인은 분석하지 않았다 [미확인].
+
+[미확인]: 드론 0과 3대 이상 동시 비행, 다중 드론 GPS OFF 비행, 드론마다 브리지를 붙여 2대 이상이 광류를 동시에 보내는 경우.
+
+### 10.2 CSV 로거와 시야 판정
+
+`scripts/csv_logger.py`는 A 가이드 §4의 CSV 계약대로 드론 상태를 기록한다. 시각은 시뮬레이션 시간이고 주기는 10Hz(0.1초)다. 한 행은 한 시각의 한 드론이다. 호스트 시간으로 10초 동안 새 시뮬 시각이 없으면 종료한다. 실행 중에는 Gazebo가 떠 있고 드론이 스폰되어 있어야 한다.
+
+컬럼은 `csv_logger.py`의 `COLUMNS`를 그대로 옮긴 것이다.
+
+```text
+run_id,time_sim_s,drone_id,estimate_time_boot_ms,estimate_age_s,
+truth_x,truth_y,truth_z,estimate_x,estimate_y,estimate_z,
+estimate_vx,estimate_vy,estimate_vz,
+position_var_x,position_var_y,position_var_z,
+uncertainty_valid,uncertainty_source,estimate_valid,visible_ids
+```
+
+값을 채우는 규칙은 다음과 같다.
+
+- 값이 없으면 빈칸이다. 추정이 없으면 추정 칸이 전부 빈칸이고 `estimate_valid=false`다.
+- 불확실성은 0으로 채우지 않는다. 불확실성이 없으면 `uncertainty_valid=false`, `uncertainty_source=unavailable`로 쓰고 `position_var_*`는 빈칸으로 둔다. 분산은 추정이 유효한 공분산(`position_cov_enu_m2`)을 줄 때만 채운다.
+- `estimate_valid`는 추정의 `valid`가 참이고 `stale`이 거짓일 때만 `true`다.
+- `visible_ids`는 JSON 배열 문자열이다(예: `[1]`). 관측자의 truth가 없으면 판정할 수 없으므로 빈칸이다.
+
+추정 소스는 `main(estimate_source=...)`로 바꾼다. 소스 함수는 드론 번호를 받아 `get_estimate` 형식의 dict 또는 None을 돌려준다. dict는 `valid`, `stale`, `time_boot_ms`, `time_sim_s`, `position_enu_m`, `velocity_enu_mps`, `uncertainty_valid`, `uncertainty_source`, `position_cov_enu_m2`를 쓴다. 기본값 `stub_estimate`는 항상 None을 돌려준다.
+
+시야 판정은 `scripts/visibility.py`에 있다. A 가이드 §13의 참조 구현이다. 관측자 카메라 위치와 yaw에서 다른 드론의 중심점이 수평 FOV 90°(±45°) 안에 있고 10m 이내이면 보인다. 거리와 FOV 경계는 포함하고 자기 자신은 뺀다. 수직 FOV와 가림은 판정하지 않는다. A의 최종본이 오면 이 파일을 교체한다.
+
+```bash
+cd ~/drone_project/scripts
+python3 test_visibility.py                 # 결과: test_visibility: all passed
+
+python3 csv_logger.py --ids 0 1 --world room --out ../logs/out.csv --duration 20   # [--run-id X]
+```
+
+검증 결과(산출물 `logs/sample_logger_check.csv`):
+
+- 헤더가 위 계약과 일치한다.
+- 140개 시각, 13.9초, 평균 간격 0.1초로 기록됐다.
+- drone_0의 `visible_ids`가 `[]` → `[1]` → `[]`로 바뀌었다. 전환 위치 y ≈ ±3.9m는 FOV ±45° 기하와 맞는다.
+- 추정 칸은 전부 빈칸이다(추정 소스가 기본 stub이었다).
+
+[미확인]: A의 `get_estimate`로 추정 칸을 채우는 경로(지금은 stub으로만 확인), yaw가 바뀌는 상황의 시야 판정.
+
+### 10.3 2대 스침 시험
+
+작성 예정.
 
 ## 부록: 이 문서에서 [미확인]으로 남긴 항목 모음
 
@@ -531,6 +685,8 @@ SITL은 `--no-mavproxy`로 띄우고 pymavlink가 TCP 5760에 붙는다(MAVProxy
 - `GZ_IP=127.0.0.1`의 효과
 - 12m 방의 공 충돌 결과 (바닥 무늬는 카메라 영상과 GUI에서 확인됨)
 - GUI 환경에서 `down_camera` 프레임 주기 (헤드리스 약 18Hz, 설정 30Hz)
-- MAVProxy `--out=udp:127.0.0.1:15550`으로 센서 메시지를 SITL에 주입하는 경로, MAVProxy 사용 시 TCP 5762 이용 가능 여부
+- MAVProxy 사용 시 TCP 5762 이용 가능 여부
 - 광류 장기 드리프트·정확도, 센서 잡음과 기체 기울기 상황
 - `land` 입력 후 모드 표시가 GUIDED로 남는 이유
+- 10.1: 드론 0과 3대 이상 동시 비행, 다중 드론 GPS OFF 비행, 드론마다 브리지를 붙여 2대 이상이 광류를 동시에 보내는 경우, 드론 1 이동 1.72m(명령 3m)의 원인
+- 10.2: 추정 칸을 A의 `get_estimate`로 채우는 경로, yaw가 바뀌는 상황의 시야 판정
