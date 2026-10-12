@@ -39,7 +39,7 @@
   runs/  logs/  results/   실행 폴더와 결과 (runs/는 git 제외)
 ```
 
-`~/drone_project`의 파일을 다른 PC로 옮기는 방법(원격 저장소 등)은 기록에 없다 [미확인].
+저장소는 GitHub `https://github.com/Multi-Bus/capstone_design.git`(`main`)에 올라가 있다. 다른 PC에서는 `git clone https://github.com/Multi-Bus/capstone_design.git ~/drone_project`로 받고 `cp env.sh.example env.sh`로 환경 파일을 만든다.
 
 ## 2. 설치
 
@@ -782,7 +782,6 @@ python3 csv_logger.py --ids 5 --world room --out ../logs/out.csv --duration 30 -
 ## 부록: 이 문서에서 [미확인]으로 남긴 항목 모음
 
 - A의 OS·`versions.txt`·ArduPilot/플러그인 커밋과의 일치 여부, OS 통일 여부
-- 저장소를 다른 PC로 옮기는 방법
 - 3.3절 전체 SITL 명령(`-I0 --sysid 1 ... --add-param-file ... --console`)의 단일 실행 결과, `python3`로 `sim_vehicle.py` 실행 가능 여부
 - 3.2절 기본 iris 스폰 문자열(`<name>` 포함 형태)의 그대로 실행 여부
 - `GZ_IP=127.0.0.1`의 효과

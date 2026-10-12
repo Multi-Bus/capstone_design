@@ -278,12 +278,12 @@ EK3_SRC1_YAW 1
 | 시야 판정 최종본 | 참조 구현(`visibility.py`)을 쓴다. | (a) A 최종본으로 교체 (b) 참조 구현 유지 | (a). 교체 후 `test_visibility.py`로 같은 케이스를 확인한다. |
 | 센서 장착 값 | front (0.1, 0, 0.05)는 권장값, 하향 (0, 0, -0.05)은 시험값. 실제 기체 사양은 미확정. | (a) 사양에 맞춰 세 곳 갱신 (`front_camera_spec.md`, `get_truth` 오프셋, `spawn_drones.py` `SENSORS`) (b) 시험값 유지 | (a). 사양을 확보하면 세 곳을 같은 값으로 맞춘다. |
 | 직접 제작 드론 사양 | 기본 iris 사용. 사양 미확보. | (a) 기본 iris로 진행 (b) 사양 확보 후 반영 | 사양 확보 전까지 결과에 `baseline_iris`를 표기한다 (A 가이드 §2). |
-| 저장소 공유 | 원격 저장소가 없다. GitHub 로그인이 필요하다. | (a) B가 원격을 만들고 공유 (b) 폴더를 직접 복사 | B가 결정할 사항이다 [미확인]. |
+| 저장소 공유 | GitHub `https://github.com/Multi-Bus/capstone_design.git` `main`에 올렸다. | A는 clone해서 `~/drone_project`에 둔다 | 같은 저장소에 A 산출물도 커밋한다. 본체 SDF와 파라미터는 A만 수정한다. |
 | 마감 | 2026-10-10이 지났다. | 연장 / 유지 | A와 합의해서 새 날짜를 적는다. |
 
 ## 6. 재현 방법 (A의 PC에서 점검 스크립트 실행)
 
-- 저장소와 `env.sh`를 A의 PC에 준비한다. 저장소 복사 방법은 [미확인]이다. `env.sh`는 git에 올라가지 않으니 매뉴얼 2.5절 내용으로 직접 만든다. 플러그인 경로는 A의 경로로 맞춘다.
+- 저장소와 `env.sh`를 A의 PC에 준비한다. 저장소는 `git clone https://github.com/Multi-Bus/capstone_design.git ~/drone_project`로 받는다. `env.sh`는 git에 올라가지 않으니 `cp env.sh.example env.sh`로 만든다. 플러그인 경로는 A의 경로로 맞춘다.
 - 스크립트는 `~/venv-ardupilot/bin/python`과 `~/ardupilot/Tools/autotest/sim_vehicle.py`를 고정 경로로 쓴다. A PC에 이 경로가 없으면 venv(OpenCV, numpy, pymavlink, gz 바인딩)를 준비하거나 스크립트 안의 `PY` 줄을 고친다 [미확인].
 - `pkill`은 쓰지 않는다. 스크립트는 자기가 띄운 프로세스 그룹만 끈다. 끝나면 `leftover` 줄을 확인한다.
 - `PART`는 A의 Gazebo GUI가 쓰는 파티션과 다른 값으로 준다.

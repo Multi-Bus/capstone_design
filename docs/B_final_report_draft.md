@@ -405,7 +405,7 @@ A 담당 항목 (B 리포트에서는 확인만 한다):
 
 통합 계획: A의 `get_estimate`와 `send_velocity`를 붙이고, 로거의 추정 칸을 채운 뒤 시야 판정을 A 최종본으로 교체한다. 그다음 2대 스침과 정사각형 시험을 같은 run ID로 다시 실행한다 [A 담당 내용 입력].
 
-GitHub: 업로드 대상은 `https://github.com/Multi-Bus/capstone_design.git`이다. 원격 `origin`으로 등록했다. 업로드 결과는 아래 9.5절에 적는다.
+GitHub: 업로드 대상은 `https://github.com/Multi-Bus/capstone_design.git`이다. `main` 브랜치를 올렸다(2026-10-12). A 산출물은 같은 저장소에 커밋한다.
 
 ---
 
