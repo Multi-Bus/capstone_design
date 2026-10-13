@@ -1,0 +1,41 @@
+{
+  "method": "Linear truth interpolation at boot time + recorded preflight clock offset",
+  "limitation": "Approximate clock alignment; retained CSV samples only; no extrapolation or invented 10Hz samples",
+  "max_interpolation_gap_sim_s": 0.3,
+  "drones": {
+    "0": {
+      "logged_rows": 236,
+      "unique_truth_samples": 236,
+      "unique_estimate_samples": 187,
+      "duplicate_estimate_rows": 49,
+      "aligned_pairs": 185,
+      "rejected_pairs": 2,
+      "retained_truth_hz": 7.716556117422999,
+      "median_truth_interval_sim_s": 0.13600000000000279,
+      "max_truth_interval_sim_s": 0.16100000000000136,
+      "estimate_stamp_backsteps": 0,
+      "negative_pair_age_rows": 104,
+      "pair_age_min_sim_s": -0.06699999999999307,
+      "pair_age_max_sim_s": 0.31099999999999994,
+      "same_subset_latest_xy_rmse_m": 0.20962809354346276,
+      "interpolated_xy_rmse_m": 0.2094610248233383
+    },
+    "1": {
+      "logged_rows": 236,
+      "unique_truth_samples": 236,
+      "unique_estimate_samples": 191,
+      "duplicate_estimate_rows": 45,
+      "aligned_pairs": 189,
+      "rejected_pairs": 2,
+      "retained_truth_hz": 7.716556117422999,
+      "median_truth_interval_sim_s": 0.13600000000000279,
+      "max_truth_interval_sim_s": 0.16100000000000136,
+      "estimate_stamp_backsteps": 0,
+      "negative_pair_age_rows": 133,
+      "pair_age_min_sim_s": -0.07899999999999707,
+      "pair_age_max_sim_s": 0.27600000000000335,
+      "same_subset_latest_xy_rmse_m": 0.11343532468484716,
+      "interpolated_xy_rmse_m": 0.1126906620474456
+    }
+  }
+}

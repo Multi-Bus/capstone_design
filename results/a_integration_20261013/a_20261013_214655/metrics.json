@@ -1,0 +1,66 @@
+{
+  "comparison": "stationary offset + latest-sample pairing; not time-interpolated",
+  "drift_reference": "one preflight offset, never refitted during flight",
+  "drones": {
+    "0": {
+      "rows": 236,
+      "span_sim_s": 30.453999999999997,
+      "median_interval_sim_s": 0.13600000000000279,
+      "xy_rmse_m": 0.22132067558267246,
+      "xy_max_m": 0.47023085457793307,
+      "phases": {
+        "hover": {
+          "rows": 77,
+          "xy_rmse_m": 0.16641008511031402,
+          "xy_max_m": 0.21418296854483582
+        },
+        "move_0": {
+          "rows": 54,
+          "xy_rmse_m": 0.22216274453129983,
+          "xy_max_m": 0.2842005738934526
+        },
+        "move_1": {
+          "rows": 65,
+          "xy_rmse_m": 0.3209561616078357,
+          "xy_max_m": 0.47023085457793307
+        },
+        "takeoff": {
+          "rows": 40,
+          "xy_rmse_m": 0.04079432349174831,
+          "xy_max_m": 0.12516923649208733
+        }
+      },
+      "uncertainty_valid_rows": 0
+    },
+    "1": {
+      "rows": 236,
+      "span_sim_s": 30.453999999999997,
+      "median_interval_sim_s": 0.13600000000000279,
+      "xy_rmse_m": 0.11650325110673711,
+      "xy_max_m": 0.2521178037472546,
+      "phases": {
+        "hover": {
+          "rows": 77,
+          "xy_rmse_m": 0.125724223671214,
+          "xy_max_m": 0.2521178037472546
+        },
+        "move_0": {
+          "rows": 54,
+          "xy_rmse_m": 0.16205865268482117,
+          "xy_max_m": 0.23575945649095525
+        },
+        "move_1": {
+          "rows": 65,
+          "xy_rmse_m": 0.09319131790305385,
+          "xy_max_m": 0.14526957338835056
+        },
+        "takeoff": {
+          "rows": 40,
+          "xy_rmse_m": 0.009247021726568369,
+          "xy_max_m": 0.026330318843566635
+        }
+      },
+      "uncertainty_valid_rows": 0
+    }
+  }
+}

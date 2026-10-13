@@ -1,0 +1,24 @@
+{
+  "method": "Linear truth interpolation at boot time + recorded preflight clock offset",
+  "limitation": "Approximate clock alignment; retained CSV samples only; no extrapolation or invented 10Hz samples",
+  "max_interpolation_gap_sim_s": 0.3,
+  "drones": {
+    "0": {
+      "logged_rows": 411,
+      "unique_truth_samples": 411,
+      "unique_estimate_samples": 341,
+      "duplicate_estimate_rows": 70,
+      "aligned_pairs": 340,
+      "rejected_pairs": 1,
+      "retained_truth_hz": 8.086625510344964,
+      "median_truth_interval_sim_s": 0.12899999999999423,
+      "max_truth_interval_sim_s": 0.15300000000000225,
+      "estimate_stamp_backsteps": 0,
+      "negative_pair_age_rows": 153,
+      "pair_age_min_sim_s": -0.06400000000000006,
+      "pair_age_max_sim_s": 0.352999999999998,
+      "same_subset_latest_xy_rmse_m": 0.22506611638518517,
+      "interpolated_xy_rmse_m": 0.22402181393118614
+    }
+  }
+}
