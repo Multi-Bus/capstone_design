@@ -1,5 +1,7 @@
 # A 통합 실행 매뉴얼
 
+2026-10-14 후속 업데이트: 원본 수신 기록, 10Hz 주기 개선, 불확실성 요약 및 반복 실행은 [묶음 검증 보고서](A_diagnostics_2026-10-14.md)를 함께 참고한다. `accuracy_summary`는 전체 공분산과 별개다. `raw_state.jsonl`, `raw_bridge_*.jsonl`과 대응 `.summary.json`이 실행 폴더에 추가된다.
+
 작성: 2026-10-13. 작업 브랜치: `a/integration`.
 
 ## 1. 지금 만든 것

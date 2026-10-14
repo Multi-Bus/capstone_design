@@ -1,0 +1,10 @@
+SENSORS_PASS {0: {'images': 12, 'scans': 12, 'texture': True, 'range_valid': True}}
+ESTIMATE_PASS {0: {'time_boot_ms': 11329, 'time_sim_s': 11.389000000000001, 'raw_position_enu_m': [-1.1001128768839408e-05, 1.3635587492899504e-05, 0.05384603142738342], 'position_enu_m': [-1.9999502672929743, 1.905373324092461e-05, 0.19493032354718326], 'velocity_enu_mps': [-8.923208224587142e-05, 8.249343954958022e-05, 0.009158247150480747], 'position_cov_enu_m2': None, 'uncertainty_valid': False, 'uncertainty_source': 'unavailable', 'valid': True, 'stale': False, 'age_host_s': 0.04736189599998397, 'mode': 'STABILIZE', 'armed': False, 'heartbeat_fresh': True, 'ekf_flags': 367, 'aligned': True, 'error': None, 'heartbeat_age_host_s': 0.0780883879999692, 'ekf_age_host_s': 0.04736189599998397, 'command_expired': False}}
+TAKEOFF_PASS
+hover PASS
+square1 PASS
+square2 PASS
+square3 PASS
+square4 PASS
+COMMAND_EXPIRY_PASS
+RESULT True

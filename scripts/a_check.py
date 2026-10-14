@@ -16,6 +16,7 @@ from get_truth import Truth
 from fleet_api import Fleet
 from csv_logger import COLUMNS, make_row
 from visibility import visible_drones
+from capture import Recorder, SampleClock
 
 
 def main():
@@ -24,7 +25,8 @@ def main():
     ap.add_argument('--out',type=Path,required=True)
     ap.add_argument('--ids',nargs='+',type=int,default=[0])
     a=ap.parse_args()
-    truth=Truth()
+    recorder=Recorder(a.out/'raw_state.jsonl')
+    truth=Truth(recorder=recorder,ids=a.ids)
     node=Node()
     sensor={i:dict(images=0, scans=0, texture=False, range_valid=False) for i in a.ids}
     callbacks=[]
@@ -43,7 +45,8 @@ def main():
     log=None
     phase='prepare'
     alignment={}
-    last_log=-1
+    sample_clock=SampleClock(.1)
+    last_boot={}
     def wait_until(predicate,seconds,label):
         end=time.monotonic()+seconds
         while time.monotonic()<end:
@@ -59,7 +62,7 @@ def main():
         if a.stage=='sensors':
             result['passed']=True
             return 0
-        fleet=Fleet(a.ids,stale_s=1.0)  # slower software rendering: explicit integration tolerance
+        fleet=Fleet(a.ids,stale_s=1.0,recorder=recorder)  # explicit integration tolerance
         wait_until(lambda:all(fleet.get_estimate(i)['valid'] for i in a.ids),180,'EKF/position readiness')
         for d in fleet.drones.values():
             d.set_origin()
@@ -98,12 +101,12 @@ def main():
         result['parameters']={i:d.parameters for i,d in fleet.drones.items()}
         print('ESTIMATE_PASS', {i:fleet.get_estimate(i) for i in a.ids},flush=True)
         log=open(a.out/'integrated.csv','w',newline='')
-        columns=COLUMNS+['phase','raw_estimate_e','raw_estimate_n','raw_estimate_u','truth_time_sim_s']
+        columns=COLUMNS+['phase','raw_estimate_e','raw_estimate_n','raw_estimate_u','truth_time_sim_s',
+                         'sample_target_time_sim_s','sample_skipped_slots','estimate_is_new']
         writer=csv.DictWriter(log,columns)
         writer.writeheader()
 
         def tick():
-            nonlocal last_log
             ts={i:truth.get(i) for i in a.ids}
             if not all(t.get('valid') for t in ts.values()):
                 raise RuntimeError('truth unavailable/stale; abort test')
@@ -112,18 +115,22 @@ def main():
             if not all(e['valid'] for e in es.values()):
                 result['invalid_estimates'] = es
                 raise RuntimeError('estimate unavailable/stale; abort test')
-            if now-last_log>=.099:
+            slot=sample_clock.due(now)
+            if slot is not None:
                 pos={i:t['position_enu_m'] for i,t in ts.items()}
                 for i,t in ts.items():
                     vis=visible_drones(i,t['camera_position_enu_m'],pos,t['camera_yaw_enu_rad'])
                     r=make_row(a.out.name,now,i,t,es[i],vis)
                     r.update(phase=phase,raw_estimate_e=es[i]['raw_position_enu_m'][0],
                              raw_estimate_n=es[i]['raw_position_enu_m'][1],
-                             raw_estimate_u=es[i]['raw_position_enu_m'][2],truth_time_sim_s=t['time_sim_s'])
+                             raw_estimate_u=es[i]['raw_position_enu_m'][2],truth_time_sim_s=t['time_sim_s'],
+                             sample_target_time_sim_s=slot[0],sample_skipped_slots=slot[1],
+                             estimate_is_new=es[i]['time_boot_ms']!=last_boot.get(i))
+                    last_boot[i]=es[i]['time_boot_ms']
                     writer.writerow(r)
+                    recorder.emit('phase',i,dict(phase=phase,time_sim_s=now))
                     if abs(t['position_enu_m'][0])>5.3 or abs(t['position_enu_m'][1])>5.3:
                         raise RuntimeError('truth outside test area')
-                last_log=now
             return now,es
 
         def mode_all(mode):
@@ -229,11 +236,16 @@ def main():
             except Exception as exc:
                 result.update(passed=False,landed=False,landing_error=repr(exc))
             result['telemetry']={i:dict(position_messages=d.received_positions,texts=d.texts,
-                                        acks=d.acks,origin=d.origin,covariance_available=d.get_estimate()['uncertainty_valid'])
+                                        acks=d.acks,origin=d.origin,accuracy_summary=d.get_estimate()['accuracy_summary'],
+                                        covariance_available=d.get_estimate()['uncertainty_valid'])
                                  for i,d in fleet.drones.items()}
             fleet.close()
         if log:
             log.close()
+        recorder.close()
+        result['recorder']=recorder.stats()
+        if result['recorder']['dropped'] or result['recorder']['error']:
+            result['passed']=False
         (a.out/'check_result.json').write_text(json.dumps(result,indent=2,ensure_ascii=False))
         print('RESULT',result['passed'],flush=True)
     return 0 if result['passed'] else 1

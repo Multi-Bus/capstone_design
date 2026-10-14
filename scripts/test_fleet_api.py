@@ -60,6 +60,17 @@ class ApiTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.drone.send_velocity(0, 0, 0)
 
+    def test_accuracy_summary_is_not_full_covariance(self):
+        self.drone._handle(self.message('UTM_GLOBAL_POSITION',h_acc=1500,v_acc=200,vel_acc=30,flags=0),10)
+        state=self.drone._estimate(10)
+        self.assertEqual(state['accuracy_summary']['h_acc_m'],1.5)
+        self.assertTrue(state['accuracy_summary']['valid'])
+        self.assertFalse(state['uncertainty_valid'])
+        self.assertIsNone(state['position_cov_enu_m2'])
+        self.assertFalse(self.drone._estimate(13)['accuracy_summary']['valid'])
+        self.drone._handle(self.message('UTM_GLOBAL_POSITION',h_acc=65535,v_acc=0,vel_acc=0,flags=0),14)
+        self.assertFalse(self.drone._estimate(14)['accuracy_summary']['valid'])
+
     def test_expired_command_stops_and_stale_state_lands(self):
         self.position()
         self.drone._hb_seen = self.drone._ekf_seen = 10

@@ -9,7 +9,9 @@ STALE_S = 0.5  # 마지막 수신 후 이 시간(호스트 시계)을 넘으면 
 
 
 class Truth:
-    def __init__(self, world="room", model_fmt="drone_{}"):
+    def __init__(self, world="room", model_fmt="drone_{}", recorder=None, ids=(0,1)):
+        self._recorder = recorder
+        self._ids = {model_fmt.format(i):i for i in ids}
         self._fmt = model_fmt
         self._poses = {}  # 모델 이름 -> (시뮬 시각, x, y, z, yaw, 수신 호스트 시각)
         self._lock = threading.Lock()
@@ -25,6 +27,10 @@ class Truth:
                 q = p.orientation
                 yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
                 self._poses[p.name] = (t, p.position.x, p.position.y, p.position.z, yaw, now)
+                if self._recorder and p.name in self._ids:
+                    self._recorder.emit('truth',self._ids[p.name],dict(time_sim_s=t,
+                        position=[p.position.x,p.position.y,p.position.z],
+                        quaternion_wxyz=[q.w,q.x,q.y,q.z],yaw_enu_rad=yaw),now)
 
     def get(self, drone_id, model_name=None):
         name = model_name or self._fmt.format(drone_id)

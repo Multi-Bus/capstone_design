@@ -1,0 +1,8 @@
+SENSORS_PASS {0: {'images': 11, 'scans': 11, 'texture': True, 'range_valid': True}, 1: {'images': 11, 'scans': 11, 'texture': True, 'range_valid': True}}
+ESTIMATE_PASS {0: {'time_boot_ms': 10331, 'time_sim_s': 10.393, 'raw_position_enu_m': [-1.4932210433471482e-05, 1.6636235159239732e-05, 0.05493547022342682], 'position_enu_m': [-1.9999552573990804, 6.396366530624344e-06, 0.20111976858085273], 'velocity_enu_mps': [-3.384417505003512e-05, 3.016848313563969e-05, 0.012948003597557545], 'position_cov_enu_m2': None, 'uncertainty_valid': False, 'uncertainty_source': 'unavailable', 'valid': True, 'stale': False, 'age_host_s': 0.0801617859999908, 'mode': 'STABILIZE', 'armed': False, 'heartbeat_fresh': True, 'ekf_flags': 367, 'aligned': True, 'error': None, 'heartbeat_age_host_s': 1.8859002869999983, 'ekf_age_host_s': 0.7732936639999934, 'command_expired': False}, 1: {'time_boot_ms': 10326, 'time_sim_s': 10.383000000000001, 'raw_position_enu_m': [-1.3131513696862385e-05, 2.890636824304238e-05, 0.05479143187403679], 'position_enu_m': [2.000044958643768, 4.860123715474322e-05, 0.20087734903997062], 'velocity_enu_mps': [-8.328167314175516e-05, 8.171499939635396e-05, 0.012829109095036983], 'position_cov_enu_m2': None, 'uncertainty_valid': False, 'uncertainty_source': 'unavailable', 'valid': True, 'stale': False, 'age_host_s': 0.09657498999999348, 'mode': 'STABILIZE', 'armed': False, 'heartbeat_fresh': True, 'ekf_flags': 367, 'aligned': True, 'error': None, 'heartbeat_age_host_s': 1.8856662119999896, 'ekf_age_host_s': 0.7416661529999828, 'command_expired': False}}
+TAKEOFF_PASS
+hover PASS
+move_0 PASS
+move_1 PASS
+COMMAND_EXPIRY_PASS
+RESULT True

@@ -34,7 +34,8 @@ def position_covariance_enu(packed):
 
 
 class DroneLink:
-    def __init__(self, drone_id, endpoint=None, stale_s=0.5, command_ttl=0.5):
+    def __init__(self, drone_id, endpoint=None, stale_s=0.5, command_ttl=0.5, recorder=None):
+        self.recorder = recorder
         self.drone_id, self.sysid = drone_id, drone_id + 1
         self.stale_s, self.command_ttl = stale_s, command_ttl
         self.link = mavutil.mavlink_connection(
@@ -46,6 +47,8 @@ class DroneLink:
         self._seen = self._hb_seen = self._ekf_seen = self._cov_seen = 0.0
         self._armed, self._mode, self._ekf = False, '', 0
         self._cov = None
+        self._accuracy = None
+        self._accuracy_seen = 0.0
         self._offset = [0.0, 0.0, 0.0]
         self._clock_offset = None
         self._aligned = False
@@ -65,6 +68,8 @@ class DroneLink:
         if msg.get_srcSystem() != self.sysid or msg.get_srcComponent() != 1:
             return
         kind = msg.get_type()
+        if self.recorder and kind in ('LOCAL_POSITION_NED','ATTITUDE','EKF_STATUS_REPORT','HEARTBEAT','STATUSTEXT','OPTICAL_FLOW','DISTANCE_SENSOR','UTM_GLOBAL_POSITION'):
+            self.recorder.emit(kind,self.drone_id,msg.to_dict(),now)
         if kind == 'HEARTBEAT':
             self._hb_seen = now
             self._armed = bool(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
@@ -85,6 +90,13 @@ class DroneLink:
         elif kind == 'LOCAL_POSITION_NED_COV':
             self._cov = position_covariance_enu(msg.covariance)
             self._cov_seen = now
+        elif kind == 'UTM_GLOBAL_POSITION':
+            # Keep transmitted accuracy summaries separate from a full covariance.
+            self._accuracy = dict(h_acc_m=msg.h_acc/1000, v_acc_m=msg.v_acc/1000,
+                                  vel_acc_mps=msg.vel_acc/100,
+                                  source='UTM_GLOBAL_POSITION',flags=msg.flags,
+                                  usable=all(0<v<65535 for v in (msg.h_acc,msg.v_acc,msg.vel_acc)))
+            self._accuracy_seen = now
         elif kind == 'STATUSTEXT':
             self.texts.append(msg.text)
             self.texts = self.texts[-500:]
@@ -113,6 +125,8 @@ class DroneLink:
             position_cov_enu_m2=copy.deepcopy(self._cov) if cov_ok else None,
             uncertainty_valid=cov_ok,
             uncertainty_source='LOCAL_POSITION_NED_COV' if cov_ok else 'unavailable',
+            accuracy_summary=(dict(self._accuracy,valid=self._accuracy['usable'] and now-self._accuracy_seen<2)
+                              if self._accuracy else None),
             valid=not stale and fresh_status and ekf_ok and self._error is None,
             stale=stale, age_host_s=now-self._seen if self._seen else None,
             mode=self._mode, armed=self._armed, heartbeat_fresh=now-self._hb_seen < 3,
@@ -145,6 +159,8 @@ class DroneLink:
             self._fault_land = False
 
     def _send_velocity(self, ve, vn, vu):
+        if self.recorder:
+            self.recorder.emit('velocity_command',self.drone_id,dict(enu=[ve,vn,vu]))
         self.link.mav.set_position_target_local_ned_send(
             0, self.sysid, 1, mavutil.mavlink.MAV_FRAME_LOCAL_NED,
             3527, 0, 0, 0, vn, ve, -vu, 0, 0, 0, 0, 0)
@@ -206,7 +222,7 @@ class DroneLink:
                         self.link.mav.heartbeat_send(6, 8, 0, 0, 0)
                         next_hb = now + 1
                     if self._hb_seen and now >= next_request:
-                        for message, interval in ((32, 100000), (193, 500000)):
+                        for message, interval in ((32, 100000), (193, 500000), (30, 100000), (340, 200000)):
                             self.command(511, message, interval)
                         self.command(512, 49)
                         if not probed_covariance:

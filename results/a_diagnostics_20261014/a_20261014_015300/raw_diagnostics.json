@@ -1,0 +1,285 @@
+{
+  "method": "Raw unique estimates vs interpolated truth using fixed preflight clock/position offsets",
+  "limitations": [
+    "Approximate source clock mapping",
+    "Correlation does not identify cause",
+    "Observer receives messages, not internal EKF covariance"
+  ],
+  "drones": {
+    "0": {
+      "streams": {
+        "truth": {
+          "samples": 4665,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 78.98524953851886,
+          "interval_source_p50": 0.012000000000000455,
+          "interval_source_p95": 0.018000000000000682,
+          "interval_host_p95": 0.021523431999980858,
+          "interval_host_max": 0.9626832440000044,
+          "source_to_host_rate": 0.7125410905673273
+        },
+        "LOCAL_POSITION_NED": {
+          "samples": 542,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 10.0,
+          "interval_source_p50": 0.10000000000000142,
+          "interval_source_p95": 0.10000000000000142,
+          "interval_host_p95": 0.21931292099998245,
+          "interval_host_max": 0.3361000709999189,
+          "source_to_host_rate": 0.7529173039992357
+        },
+        "ATTITUDE": {
+          "samples": 573,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 10.0,
+          "interval_source_p50": 0.10000000000000142,
+          "interval_source_p95": 0.10000000000000142,
+          "interval_host_p95": 0.21913219500004288,
+          "interval_host_max": 0.3361000709999189,
+          "source_to_host_rate": 0.7340651479410527
+        }
+      },
+      "flow": {
+        "samples": 1793,
+        "duplicates": 0,
+        "backwards": 0,
+        "rate_source_hz": 30.302517882205727,
+        "interval_source_p50": 0.03300000000000125,
+        "interval_source_p95": 0.03300000000000125,
+        "interval_host_p95": 0.07488278799996806,
+        "interval_host_max": 0.12199671500002296,
+        "source_to_host_rate": 0.7224332139940354
+      },
+      "range": {
+        "samples": 1794,
+        "duplicates": 0,
+        "backwards": 0,
+        "rate_source_hz": 30.30764029749831,
+        "interval_source_p50": 0.03300000000000125,
+        "interval_source_p95": 0.03300000000000125,
+        "interval_host_p95": 0.07465879099993344,
+        "interval_host_max": 0.11877385299999332,
+        "source_to_host_rate": 0.7221673595182612
+      },
+      "camera_skips": 1,
+      "phases": {
+        "hover": {
+          "samples": 99,
+          "xy_rmse_m": 0.097947023639535,
+          "xy_max_m": 0.1927676369139603,
+          "tilt_p95_deg": 1.0737960289334676,
+          "flow_quality_median": 221,
+          "yaw_error_median_deg": 0.9375903469473519,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "move_0": {
+          "samples": 72,
+          "xy_rmse_m": 0.17209621004985046,
+          "xy_max_m": 0.20184484466350658,
+          "tilt_p95_deg": 2.169636616677102,
+          "flow_quality_median": 219.0,
+          "yaw_error_median_deg": 0.6663381330387932,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "move_1": {
+          "samples": 69,
+          "xy_rmse_m": 0.17092946118995683,
+          "xy_max_m": 0.2085608884397962,
+          "tilt_p95_deg": 1.1311342560250204,
+          "flow_quality_median": 225,
+          "yaw_error_median_deg": 0.5526073260050935,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "takeoff": {
+          "samples": 49,
+          "xy_rmse_m": 0.03243001807522448,
+          "xy_max_m": 0.09339278775599658,
+          "tilt_p95_deg": 0.6316769443342796,
+          "flow_quality_median": 127,
+          "yaw_error_median_deg": 1.2874565533218998,
+          "flow_quality_zero_fraction": 0.20408163265306123
+        }
+      },
+      "HEARTBEAT_host_gap_max_s": 2.4673057740000104,
+      "EKF_STATUS_REPORT_host_gap_max_s": 1.277754558999959,
+      "xy_rmse_m": 0.1334879216125319,
+      "tilt_error_correlation": 0.4563850867076169,
+      "flow_error_correlation": 0.6553131990600343,
+      "flow_processing_host_p95_s": 0.005304088000002594,
+      "accuracy_summary": {
+        "samples": 286,
+        "usable_samples": 276,
+        "h_acc_m_range": [
+          0.707,
+          1.312
+        ],
+        "v_acc_m_range": [
+          0.112,
+          2.0
+        ]
+      }
+    },
+    "1": {
+      "streams": {
+        "truth": {
+          "samples": 4665,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 78.98524953851886,
+          "interval_source_p50": 0.012000000000000455,
+          "interval_source_p95": 0.018000000000000682,
+          "interval_host_p95": 0.021523431999980858,
+          "interval_host_max": 0.9626832440000044,
+          "source_to_host_rate": 0.7125410905673273
+        },
+        "LOCAL_POSITION_NED": {
+          "samples": 542,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 10.0,
+          "interval_source_p50": 0.10000000000000142,
+          "interval_source_p95": 0.10000000000000142,
+          "interval_host_p95": 0.22276914299993678,
+          "interval_host_max": 0.32785484099997575,
+          "source_to_host_rate": 0.7527942598953999
+        },
+        "ATTITUDE": {
+          "samples": 572,
+          "duplicates": 0,
+          "backwards": 0,
+          "rate_source_hz": 10.0,
+          "interval_source_p50": 0.10000000000000142,
+          "interval_source_p95": 0.10000000000000142,
+          "interval_host_p95": 0.2231187239999599,
+          "interval_host_max": 0.32785484099997575,
+          "source_to_host_rate": 0.7344424592173647
+        }
+      },
+      "flow": {
+        "samples": 1793,
+        "duplicates": 0,
+        "backwards": 0,
+        "rate_source_hz": 30.302517882205727,
+        "interval_source_p50": 0.03300000000000125,
+        "interval_source_p95": 0.03300000000000125,
+        "interval_host_p95": 0.07487600000001748,
+        "interval_host_max": 0.12224761899994974,
+        "source_to_host_rate": 0.7225654912094629
+      },
+      "range": {
+        "samples": 1794,
+        "duplicates": 0,
+        "backwards": 0,
+        "rate_source_hz": 30.30764029749831,
+        "interval_source_p50": 0.03300000000000125,
+        "interval_source_p95": 0.03300000000000125,
+        "interval_host_p95": 0.07428664999997636,
+        "interval_host_max": 0.11601923900002475,
+        "source_to_host_rate": 0.7221581648093878
+      },
+      "camera_skips": 1,
+      "phases": {
+        "hover": {
+          "samples": 100,
+          "xy_rmse_m": 0.0757996077525954,
+          "xy_max_m": 0.1591534021813329,
+          "tilt_p95_deg": 1.2897669350399694,
+          "flow_quality_median": 217.0,
+          "yaw_error_median_deg": 0.9840705473740223,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "move_0": {
+          "samples": 71,
+          "xy_rmse_m": 0.05359954655724484,
+          "xy_max_m": 0.07825424068530194,
+          "tilt_p95_deg": 1.5736524040055722,
+          "flow_quality_median": 217,
+          "yaw_error_median_deg": 0.739227878718026,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "move_1": {
+          "samples": 70,
+          "xy_rmse_m": 0.06409798812016129,
+          "xy_max_m": 0.10072405134471166,
+          "tilt_p95_deg": 2.5486276693598167,
+          "flow_quality_median": 219.0,
+          "yaw_error_median_deg": 0.5502639188423251,
+          "flow_quality_zero_fraction": 0.0
+        },
+        "takeoff": {
+          "samples": 48,
+          "xy_rmse_m": 0.005224592098075765,
+          "xy_max_m": 0.012802503335925025,
+          "tilt_p95_deg": 0.3055448722893119,
+          "flow_quality_median": 190.0,
+          "yaw_error_median_deg": 1.2862452873146522,
+          "flow_quality_zero_fraction": 0.10416666666666667
+        }
+      },
+      "HEARTBEAT_host_gap_max_s": 2.4785042849999854,
+      "EKF_STATUS_REPORT_host_gap_max_s": 1.2875870210000357,
+      "xy_rmse_m": 0.06077480223034858,
+      "tilt_error_correlation": 0.33107785289588654,
+      "flow_error_correlation": 0.41680351947566946,
+      "flow_processing_host_p95_s": 0.005514928999900803,
+      "accuracy_summary": {
+        "samples": 286,
+        "usable_samples": 276,
+        "h_acc_m_range": [
+          0.707,
+          1.311
+        ],
+        "v_acc_m_range": [
+          0.112,
+          2.0
+        ]
+      }
+    }
+  },
+  "recorder_health": {
+    "raw_bridge_1.summary.json": {
+      "accepted": 3588,
+      "written": 3588,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    },
+    "raw_bridge_0.summary.json": {
+      "accepted": 3588,
+      "written": 3588,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    },
+    "raw_state.summary.json": {
+      "accepted": 13609,
+      "written": 13609,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    }
+  },
+  "csv": {
+    "0": {
+      "rows": 290,
+      "rate_sim_hz": 9.998962045462408,
+      "skipped_slots": 0,
+      "repeated_estimate_rows": 0
+    },
+    "1": {
+      "rows": 290,
+      "rate_sim_hz": 9.998962045462408,
+      "skipped_slots": 0,
+      "repeated_estimate_rows": 14
+    }
+  }
+}

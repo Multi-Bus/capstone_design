@@ -1,0 +1,552 @@
+{
+  "stage": "two",
+  "passed": true,
+  "sensor": {
+    "0": {
+      "images": 1762,
+      "scans": 1762,
+      "texture": true,
+      "range_valid": true
+    },
+    "1": {
+      "images": 1762,
+      "scans": 1761,
+      "texture": true,
+      "range_valid": true
+    }
+  },
+  "alignment": {
+    "0": {
+      "world_minus_local_enu_m": [
+        -1.9999453602074773,
+        -4.218126036049672e-06,
+        0.14593236069983123
+      ],
+      "sim_minus_boot_s": 0.053000000000000824,
+      "method": "stationary latest-sample median; not hardware time synchronization"
+    },
+    "1": {
+      "world_minus_local_enu_m": [
+        2.0000242339066556,
+        1.4800764355997046e-06,
+        0.14605288501685737
+      ],
+      "sim_minus_boot_s": 0.053000000000000824,
+      "method": "stationary latest-sample median; not hardware time synchronization"
+    }
+  },
+  "parameters": {
+    "0": {
+      "BARO1_GND_PRESS": 101322.7109375,
+      "BARO2_GND_PRESS": 101323.640625,
+      "INS_GYR_ID": 2752772.0,
+      "INS_ACC_ID": 2753028.0,
+      "INS_GYR2_ID": 2752780.0,
+      "INS_ACC2_ID": 2753036.0,
+      "ARMING_SKIPCHK": 0.0,
+      "MIS_TOTAL": 1.0,
+      "FRAME_CLASS": 1.0,
+      "FRAME_TYPE": 1.0,
+      "AHRS_EKF_TYPE": 3.0,
+      "EK3_ENABLE": 1.0,
+      "GPS1_TYPE": 0.0,
+      "GPS2_TYPE": 0.0,
+      "FLOW_TYPE": 5.0,
+      "RNGFND1_TYPE": 10.0,
+      "EK3_SRC1_POSXY": 0.0,
+      "EK3_SRC1_VELXY": 5.0,
+      "EK3_SRC1_POSZ": 2.0,
+      "STAT_FLTTIME": 39.0,
+      "STAT_RUNTIME": 60.0,
+      "STAT_FLTCNT": 1.0,
+      "STAT_DISTFLWN": 3.4779751300811768,
+      "MOT_THST_HOVER": 0.36720600724220276
+    },
+    "1": {
+      "BARO1_GND_PRESS": 101322.7109375,
+      "BARO2_GND_PRESS": 101323.640625,
+      "INS_GYR_ID": 2752772.0,
+      "INS_ACC_ID": 2753028.0,
+      "INS_GYR2_ID": 2752780.0,
+      "INS_ACC2_ID": 2753036.0,
+      "ARMING_SKIPCHK": 0.0,
+      "MIS_TOTAL": 1.0,
+      "FRAME_CLASS": 1.0,
+      "FRAME_TYPE": 1.0,
+      "AHRS_EKF_TYPE": 3.0,
+      "EK3_ENABLE": 1.0,
+      "GPS1_TYPE": 0.0,
+      "GPS2_TYPE": 0.0,
+      "FLOW_TYPE": 5.0,
+      "RNGFND1_TYPE": 10.0,
+      "EK3_SRC1_POSXY": 0.0,
+      "EK3_SRC1_VELXY": 5.0,
+      "EK3_SRC1_POSZ": 2.0,
+      "STAT_FLTTIME": 39.0,
+      "STAT_RUNTIME": 60.0,
+      "STAT_FLTCNT": 1.0,
+      "STAT_DISTFLWN": 3.4616446495056152,
+      "MOT_THST_HOVER": 0.366733193397522
+    }
+  },
+  "landed": true,
+  "telemetry": {
+    "0": {
+      "position_messages": 532,
+      "texts": [
+        "ArduCopter V4.8.0-dev (a04e2c93)",
+        "4e6e924fe5af4ba8a35fce5c303caa44",
+        "Frame: QUAD/X",
+        "No ap_message for mavlink id (64)",
+        "No ap_message for mavlink id (230)",
+        "Initialising ArduPilot",
+        "Barometer 1 calibration complete",
+        "Barometer 2 calibration complete",
+        "ArduPilot Ready",
+        "RC7: SaveWaypoint LOW",
+        "RC8: PrecisionLoiter MIDDLE",
+        "EKF3 IMU0 initialised",
+        "EKF3 IMU1 initialised",
+        "AHRS: EKF3 active",
+        "EKF3 IMU0 fusing optical flow",
+        "EKF3 IMU1 fusing optical flow",
+        "EKF3 IMU0 tilt alignment complete",
+        "EKF3 IMU0 started relative aiding",
+        "EKF3 IMU1 tilt alignment complete",
+        "EKF3 IMU1 started relative aiding",
+        "EKF3 IMU0 MAG0 initial yaw alignment complete",
+        "EKF3 IMU1 MAG0 initial yaw alignment complete",
+        "EKF3 IMU0 origin set",
+        "EKF3 IMU1 origin set",
+        "Field Elevation Set: 0m",
+        "Arm: Accels inconsistent",
+        "Arm: Accels inconsistent",
+        "Arm: Accels inconsistent",
+        "Arming motors",
+        "PrecLand: Failsafe Measures",
+        "Disarming motors"
+      ],
+      "acks": [
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 2
+        },
+        {
+          "command": 511,
+          "result": 2
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 400,
+          "result": 0
+        },
+        {
+          "command": 22,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        }
+      ],
+      "origin": {
+        "latitude_deg": 37.0,
+        "longitude_deg": 127.0,
+        "altitude_m": 0.0
+      },
+      "covariance_available": false
+    },
+    "1": {
+      "position_messages": 532,
+      "texts": [
+        "ArduCopter V4.8.0-dev (a04e2c93)",
+        "5e6e924fe5af4ba8a35fce5c303caa44",
+        "Frame: QUAD/X",
+        "No ap_message for mavlink id (64)",
+        "No ap_message for mavlink id (230)",
+        "Initialising ArduPilot",
+        "Barometer 1 calibration complete",
+        "Barometer 2 calibration complete",
+        "ArduPilot Ready",
+        "RC7: SaveWaypoint LOW",
+        "RC8: PrecisionLoiter MIDDLE",
+        "EKF3 IMU0 initialised",
+        "EKF3 IMU1 initialised",
+        "AHRS: EKF3 active",
+        "EKF3 IMU0 fusing optical flow",
+        "EKF3 IMU1 fusing optical flow",
+        "EKF3 IMU0 tilt alignment complete",
+        "EKF3 IMU0 started relative aiding",
+        "EKF3 IMU1 tilt alignment complete",
+        "EKF3 IMU1 started relative aiding",
+        "EKF3 IMU0 MAG0 initial yaw alignment complete",
+        "EKF3 IMU1 MAG0 initial yaw alignment complete",
+        "EKF3 IMU0 origin set",
+        "EKF3 IMU1 origin set",
+        "Field Elevation Set: 0m",
+        "Arm: Accels inconsistent",
+        "Arm: Accels inconsistent",
+        "Arm: Accels inconsistent",
+        "Arming motors",
+        "PrecLand: Failsafe Measures",
+        "Disarming motors"
+      ],
+      "acks": [
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 2
+        },
+        {
+          "command": 511,
+          "result": 2
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 410,
+          "result": 4
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 400,
+          "result": 4
+        },
+        {
+          "command": 400,
+          "result": 0
+        },
+        {
+          "command": 22,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 511,
+          "result": 0
+        },
+        {
+          "command": 512,
+          "result": 0
+        }
+      ],
+      "origin": {
+        "latitude_deg": 37.0,
+        "longitude_deg": 127.0,
+        "altitude_m": 0.0
+      },
+      "covariance_available": false
+    }
+  },
+  "recorder": {
+    "accepted": 12655,
+    "written": 12655,
+    "dropped": 0,
+    "error": null,
+    "pending": 0,
+    "closed": true,
+    "writer_alive": false
+  }
+}

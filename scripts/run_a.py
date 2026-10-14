@@ -22,6 +22,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--stage', choices=['sensors', 'hover', 'square', 'two'], default='sensors')
     ap.add_argument('--timeout', type=float, default=900)
+    ap.add_argument('--mavproxy-streamrate',type=int,default=-1,
+                    help='-1 leaves per-message rate control to Fleet; 4 reproduces old conflict')
     a = ap.parse_args()
     run = ROOT / 'runs' / time.strftime('a_%Y%m%d_%H%M%S')
     run.mkdir(parents=True, exist_ok=False)
@@ -97,6 +99,7 @@ def main():
         metadata['packages'] = {name: importlib.metadata.version(name)
                                 for name in ('numpy', 'pymavlink', 'MAVProxy', 'opencv-python')}
         metadata['model'] = 'baseline_iris; physical vehicle specifications not applied'
+        metadata['mavproxy_streamrate'] = a.mavproxy_streamrate
         metadata['arducopter_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         (run/'metadata.json').write_text(json.dumps(metadata,indent=2))
         gz = launch('gazebo',['gz','sim','-s','-r','-v4','--headless-rendering',ROOT/'worlds/room.sdf'])
@@ -125,10 +128,12 @@ def main():
                        '--master',f'tcp:127.0.0.1:{5760+10*i}',
                        '--out',f'udp:127.0.0.1:{14550+10*i}',
                        '--out',f'udp:127.0.0.1:{15550+10*i}',
+                       '--streamrate',str(a.mavproxy_streamrate),
                        '--daemon','--state-basedir',str(folder)],folder)
                 launch(f'bridge_{i}',[sys.executable,'-u',ROOT/'scripts/sensor_bridge.py',
                        '--mav',f'udpin:127.0.0.1:{15550+10*i}',
-                       '--cam',f'/drone_{i}/down_camera/image','--range',f'/drone_{i}/down_range/scan'])
+                       '--cam',f'/drone_{i}/down_camera/image','--range',f'/drone_{i}/down_range/scan',
+                       '--record',run/f'raw_bridge_{i}.jsonl','--drone-id',str(i)])
         check = launch('check',[sys.executable,'-u',ROOT/'scripts/a_check.py',
                                 '--stage',a.stage,'--out',run,'--ids',*map(str,ids)])
         deadline=time.monotonic()+a.timeout
@@ -144,6 +149,14 @@ def main():
         print(repr(exc),flush=True)
     finally:
         cleanup()
+        health={p.name:json.loads(p.read_text()) for p in run.glob('raw*.summary.json')}
+        outcome['recorder_health']=health
+        if outcome['status']=='passed' and a.stage!='sensors':
+            expected=['raw_state.summary.json']+[f'raw_bridge_{i}.summary.json' for i in ids]
+            if any(name not in health for name in expected) or any(
+                    h['dropped'] or h['error'] or h['accepted']!=h['written'] for h in health.values()):
+                outcome.update(status='failed',error='raw recording incomplete')
+                rc=1
         outcome['exit_code']=rc
         (run/'runner_result.json').write_text(json.dumps(outcome,indent=2))
     return rc

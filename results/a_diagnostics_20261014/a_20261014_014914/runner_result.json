@@ -1,0 +1,35 @@
+{
+  "stage": "two",
+  "run_dir": "/home/jmhwang391/capstone_design/runs/a_20261014_014914",
+  "status": "passed",
+  "recorder_health": {
+    "raw_bridge_1.summary.json": {
+      "accepted": 3552,
+      "written": 3552,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    },
+    "raw_bridge_0.summary.json": {
+      "accepted": 3552,
+      "written": 3552,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    },
+    "raw_state.summary.json": {
+      "accepted": 12655,
+      "written": 12655,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    }
+  },
+  "exit_code": 0
+}

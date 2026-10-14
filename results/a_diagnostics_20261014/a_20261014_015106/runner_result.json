@@ -1,0 +1,26 @@
+{
+  "stage": "square",
+  "run_dir": "/home/jmhwang391/capstone_design/runs/a_20261014_015106",
+  "status": "passed",
+  "recorder_health": {
+    "raw_bridge_0.summary.json": {
+      "accepted": 4772,
+      "written": 4772,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    },
+    "raw_state.summary.json": {
+      "accepted": 7828,
+      "written": 7828,
+      "dropped": 0,
+      "error": null,
+      "pending": 0,
+      "closed": true,
+      "writer_alive": false
+    }
+  },
+  "exit_code": 0
+}

@@ -1,0 +1,245 @@
+[
+  {
+    "run": "a_20261014_014230",
+    "stage": "square",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 8.029839921255762,
+        "csv_hz": 9.994447529150472,
+        "xy_rmse": 0.3111601932497047,
+        "repeated": 94,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.7465807125732445,
+          "square1": 0.5547242182559535,
+          "square2": 0.42910020182664144,
+          "square3": 0.31130600568683664,
+          "square4": 0.1476070270869972,
+          "takeoff": 1.0658454360081886
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      }
+    },
+    "dropped": 0
+  },
+  {
+    "run": "a_20261014_014455",
+    "stage": "two",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 8.250607493359956,
+        "csv_hz": 9.988249118683902,
+        "xy_rmse": 0.10053801686466432,
+        "repeated": 44,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9524830334183051,
+          "move_0": 0.6501628233753953,
+          "move_1": 0.5000353111065978,
+          "takeoff": 1.2407841817503114
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      },
+      "1": {
+        "raw_hz": 8.19301616001808,
+        "csv_hz": 9.988249118683902,
+        "xy_rmse": 0.11744860570045562,
+        "repeated": 60,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9941541718796966,
+          "move_0": 0.6523162182797329,
+          "move_1": 0.460824770681437,
+          "takeoff": 1.2415273181006896
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      }
+    },
+    "dropped": 0
+  },
+  {
+    "run": "a_20261014_014650",
+    "stage": "square",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 10.0,
+        "csv_hz": 9.999799603214365,
+        "xy_rmse": 0.21328380630608515,
+        "repeated": 1,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.798927436183414,
+          "square1": 0.5798892713331792,
+          "square2": 0.4361327045127683,
+          "square3": 0.31255728736913546,
+          "square4": 0.14412261237667562,
+          "takeoff": 1.142860751146705
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      }
+    },
+    "dropped": 0
+  },
+  {
+    "run": "a_20261014_014914",
+    "stage": "two",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 10.000188327463793,
+        "csv_hz": 9.999308006366343,
+        "xy_rmse": 0.24455843256482868,
+        "repeated": 0,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.7854501017452575,
+          "move_0": 0.6182965761025381,
+          "move_1": 0.5152365450584345,
+          "takeoff": 1.2807535855613092
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      },
+      "1": {
+        "raw_hz": 10.000188327463793,
+        "csv_hz": 9.999308006366343,
+        "xy_rmse": 0.04856509343232575,
+        "repeated": 0,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9437865259794987,
+          "move_0": 0.7403336018609153,
+          "move_1": 0.5330521950524769,
+          "takeoff": 1.2882409861892046
+        },
+        "accuracy": {
+          "samples": 0,
+          "usable_samples": 0,
+          "h_acc_m_range": null,
+          "v_acc_m_range": null
+        }
+      }
+    },
+    "dropped": 0
+  },
+  {
+    "run": "a_20261014_015106",
+    "stage": "square",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 9.999726783421218,
+        "csv_hz": 10.0,
+        "xy_rmse": 0.16287953568940963,
+        "repeated": 5,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9452810880655989,
+          "square1": 0.652140328342208,
+          "square2": 0.5165917249903405,
+          "square3": 0.3691295540664862,
+          "square4": 0.20323200437609354,
+          "takeoff": 1.3723874034662003
+        },
+        "accuracy": {
+          "samples": 382,
+          "usable_samples": 372,
+          "h_acc_m_range": [
+            0.707,
+            1.578
+          ],
+          "v_acc_m_range": [
+            0.112,
+            2.0
+          ]
+        }
+      }
+    },
+    "dropped": 0
+  },
+  {
+    "run": "a_20261014_015300",
+    "stage": "two",
+    "status": "passed",
+    "drones": {
+      "0": {
+        "raw_hz": 10.0,
+        "csv_hz": 9.998962045462408,
+        "xy_rmse": 0.1334879216125319,
+        "repeated": 0,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9375903469473519,
+          "move_0": 0.6663381330387932,
+          "move_1": 0.5526073260050935,
+          "takeoff": 1.2874565533218998
+        },
+        "accuracy": {
+          "samples": 286,
+          "usable_samples": 276,
+          "h_acc_m_range": [
+            0.707,
+            1.312
+          ],
+          "v_acc_m_range": [
+            0.112,
+            2.0
+          ]
+        }
+      },
+      "1": {
+        "raw_hz": 10.0,
+        "csv_hz": 9.998962045462408,
+        "xy_rmse": 0.06077480223034858,
+        "repeated": 14,
+        "skipped": 0,
+        "yaw_deg": {
+          "hover": 0.9840705473740223,
+          "move_0": 0.739227878718026,
+          "move_1": 0.5502639188423251,
+          "takeoff": 1.2862452873146522
+        },
+        "accuracy": {
+          "samples": 286,
+          "usable_samples": 276,
+          "h_acc_m_range": [
+            0.707,
+            1.311
+          ],
+          "v_acc_m_range": [
+            0.112,
+            2.0
+          ]
+        }
+      }
+    },
+    "dropped": 0
+  }
+]
