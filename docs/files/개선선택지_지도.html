@@ -1,0 +1,419 @@
+<title>개선 선택지 지도</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* layout: 단일 컬럼 보고서. 위에서부터 요약 → 난이도×차별성 행렬 → 전체 표 → 추천 조합 계층도 */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#d9dde4; --grid:#eceff3;
+  --accent:#1f5fbf; --accent-soft:#e3ecfa;
+  --c-com:#1f6fd1; --c-path:#c2410c; --c-avoid:#0f8a6a; --c-hw:#7a5af0; --c-pos:#a16207;
+  --sans:"IBM Plex Sans KR",system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --fg:#e6e9ef; --muted:#9aa3b2; --line:#2d3542; --grid:#222936;
+  --accent:#7aa8f0; --accent-soft:#1f2c42;
+  --c-com:#6aa6f2; --c-path:#f08a5a; --c-avoid:#4cc9a4; --c-hw:#a892ff; --c-pos:#e0b04a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --fg:#e6e9ef; --muted:#9aa3b2; --line:#2d3542; --grid:#222936;
+  --accent:#7aa8f0; --accent-soft:#1f2c42;
+  --c-com:#6aa6f2; --c-path:#f08a5a; --c-avoid:#4cc9a4; --c-hw:#a892ff; --c-pos:#e0b04a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6}
+.wrap{max-width:1040px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:36px}
+h1{font-size:1.75rem;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:1.2rem;margin:0 0 4px;text-wrap:balance}
+p{margin:0;max-width:68ch}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sub{color:var(--muted);font-size:.9rem}
+header{display:flex;flex-direction:column;gap:8px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.legend button{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.legend button[aria-pressed="true"]{border-color:var(--fg)}
+.legend button:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--c)}
+/* explore: 왼쪽 흐름 지도, 오른쪽 선택지 패널 */
+.explore{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:12px;align-items:stretch}
+@media (max-width:900px){.explore{grid-template-columns:1fr}}
+.flow-box{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.flow{box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:104px 120px;min-width:720px;padding:24px;position:relative}
+.node{font:inherit;color:var(--fg);text-align:left;cursor:pointer;position:relative;border:1.5px solid var(--line);border-left:5px solid var(--c,var(--line));border-radius:10px;background:var(--bg);padding:9px 11px;display:flex;flex-direction:column;gap:2px;z-index:1;transition:opacity .15s,box-shadow .15s,border-color .15s}
+.node.env{border-style:dashed}
+.node.fl{opacity:.3}
+.node.on{border-color:var(--accent);border-left-color:var(--c,var(--accent));box-shadow:0 0 0 3px var(--accent-soft)}
+.node:focus-visible,.opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node .n{font-weight:700}
+.node small{color:var(--muted);font-size:.76rem;line-height:1.35}
+.node .ct{font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-top:4px}
+#edges{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:visible}
+#edges .e{fill:none;stroke:var(--muted);stroke-width:1.5;transition:opacity .15s}
+#edges .e.fb{stroke-dasharray:6 4}
+#edges .e.hi{stroke:var(--accent);stroke-width:2.6}
+#edges .e.lo,#edges .lb.lo{opacity:.4}
+#edges .lb rect{fill:var(--surface);stroke:var(--line)}
+#edges .lb text{fill:var(--fg);font-size:11px;font-family:var(--sans)}
+#edges .lb.hi rect{stroke:var(--accent)}
+#edges marker path{fill:context-stroke}
+.panel{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel .ph{display:flex;flex-direction:column;gap:2px;margin-bottom:2px}
+.panel .ph b{font-size:1.1rem}
+.panel .ph span{font-size:.8rem;color:var(--muted)}
+.opt{font:inherit;color:var(--fg);text-align:left;cursor:pointer;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;background:var(--bg);padding:9px 11px;display:flex;flex-direction:column;gap:3px;transition:opacity .15s,background .15s}
+.opt .l1{display:flex;gap:8px;align-items:baseline;font-size:.88rem;line-height:1.4}
+.opt .l1 b{font-family:var(--mono);color:var(--c);flex:none}
+.opt .l2{font-size:.76rem;color:var(--muted)}
+.opt .pk{margin-left:auto;flex:none;font-size:.68rem;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 7px}
+.opt.sel{border-color:var(--accent);border-left-color:var(--c);background:var(--accent-soft)}
+.opt.fl{opacity:.3}
+.empty{font-size:.86rem;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+.infl{border-top:1px solid var(--grid);padding-top:10px;margin-top:4px;font-size:.82rem;display:flex;flex-direction:column;gap:8px}
+.infl h5{margin:0 0 2px;font-size:.72rem;color:var(--muted);font-weight:500;letter-spacing:.05em}
+.infl ul{margin:0;padding-left:1.1em}
+.tl{display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:6px}
+.tl .it{position:relative;padding:0 0 18px 18px}
+.tl .it::before{content:"";position:absolute;left:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.tl .d{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.tl h3{font-size:.98rem;margin:0}
+.tl ul{margin:6px 0 8px;padding-left:1.1em;font-size:.88rem;display:flex;flex-direction:column;gap:3px}
+.tl .tg{display:flex;gap:6px;flex-wrap:wrap}
+.tl .tg button{font:inherit;font-family:var(--mono);font-size:.74rem;border:1px solid var(--c);color:var(--c);background:var(--surface);border-radius:4px;padding:1px 7px;cursor:pointer}
+.keyline{display:flex;gap:18px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin-top:8px}
+.keyline svg{vertical-align:middle}
+/* detail */
+.detail{border:1px solid var(--line);border-left:6px solid var(--c);background:var(--surface);border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:18px}
+.dh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dh .cd{font-family:var(--mono);font-weight:600;background:var(--c);color:var(--surface);border-radius:6px;padding:2px 10px}
+.dh h3{margin:0;font-size:1.25rem;flex:1 1 260px;text-wrap:balance}
+.pill{font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:1px 10px;color:var(--muted)}
+.pill.rc{border-color:var(--accent);color:var(--accent)}
+.dg{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px 32px}
+@media (max-width:760px){.dg{grid-template-columns:1fr}}
+.dg h4{margin:0 0 6px;font-size:.74rem;font-weight:500;color:var(--muted);letter-spacing:.06em}
+.dg p{font-size:.96rem;max-width:62ch}
+.dg ul{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:3px;font-size:.9rem}
+.mt{display:flex;flex-direction:column;gap:14px}
+.mn{margin-top:6px;font-size:.84rem;line-height:1.5}
+.lv{display:inline-flex;gap:3px;align-items:center;white-space:nowrap}
+.lv i{width:9px;height:9px;border-radius:2px;background:var(--grid)}
+.lv i.on{background:var(--fg)}
+.lv em{font-style:normal;margin-left:6px;color:var(--muted);font-size:.8rem}
+.mt .lv i{width:16px;height:10px}
+.mt .lv em{font-size:.9rem;color:var(--fg);font-weight:500}
+/* table */
+.table-box{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:780px;table-layout:fixed;font-size:.86rem}
+th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--grid)}
+th{font-size:.74rem;color:var(--muted);font-weight:500;letter-spacing:.05em;background:var(--bg);border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+tr.grp td{background:var(--bg);color:var(--c);font-weight:700;font-size:.8rem;padding:8px 14px;border-bottom:1px solid var(--line)}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--grid)}
+tr.sel td,tr.sel:hover td{background:var(--accent-soft)}
+tr.dim td{opacity:.3}
+td.code span{font-family:var(--mono);font-weight:600;color:var(--c);border:1.5px solid var(--c);border-radius:6px;padding:1px 8px}
+td .nm{font-weight:700;display:block;line-height:1.4}
+td .td{color:var(--muted);font-size:.82rem;line-height:1.5;display:block;margin-top:4px}
+td .sub{display:block;margin-top:5px;font-size:.8rem;line-height:1.45}
+td.as{font-size:.82rem;line-height:1.5;color:var(--muted)}
+/* recommendation */
+.rec{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:760px){.rec{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:8px}
+.layer{border:1.5px solid var(--c);border-radius:8px;padding:12px 14px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.layer .h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:700}
+.layer .h span{font-family:var(--mono);font-size:.75rem;color:var(--c);font-weight:600}
+.layer p{font-size:.86rem;color:var(--muted)}
+.arrow{text-align:center;color:var(--muted);font-size:.8rem;font-family:var(--mono)}
+.data{border:1px dashed var(--line);border-radius:8px;padding:10px 14px;font-size:.85rem;color:var(--muted)}
+ol.reasons{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:10px}
+ol.reasons li{max-width:60ch}
+ol.reasons small{display:block;color:var(--muted);font-size:.8rem}
+.note{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:no-preference){.opt,tr td{transition:opacity .15s,background .15s}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">미팅 숙제 2 · 11/12 초안</span>
+  <h1>개선 가능 항목 선택지 지도</h1>
+  <p class="sub">18개 선택지를 드론 처리 흐름(센서 → 위치 → 통신 → 경로 → 회피) 위에 놓았다. 단계를 누르면 선택지가 나오고, 영역 버튼으로 걸러 볼 수 있다. "추천" 표시가 1차 추천 조합이다.</p>
+  <div class="legend" id="legend"></div>
+</header>
+
+<section>
+  <h2>드론 처리 흐름과 선택지</h2>
+  <p class="sub">왼쪽에서 단계를 누르면 오른쪽에 그 단계의 개선 선택지가 나온다. 선택지를 하나 누르면 아래 설명이 바뀐다. 화살표는 "앞 항목이 뒤 항목에 주는 영향", 점선은 되먹임이다.</p>
+  <div class="keyline"><span><svg width="34" height="8"><line x1="0" y1="4" x2="34" y2="4" stroke="currentColor" stroke-width="1.6"/></svg> 정방향 영향</span><span><svg width="34" height="8"><line x1="0" y1="4" x2="34" y2="4" stroke="currentColor" stroke-width="1.6" stroke-dasharray="6 4"/></svg> 되먹임</span><span>점선 테두리 = 기체 밖 요인</span></div>
+  <div class="explore">
+    <div class="flow-box"><div class="flow" id="flow"></div></div>
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
+</section>
+
+<section class="detail" id="detail" aria-live="polite"></section>
+
+<section>
+  <h2>전체 선택지 표</h2>
+  <p class="sub">영역별로 묶었다. 행을 누르면 위 설명이 바뀐다.</p>
+  <div class="table-box" style="margin-top:12px">
+    <table>
+      <colgroup><col style="width:72px"><col style="width:36%"><col style="width:24%"><col style="width:110px"><col></colgroup>
+      <thead><tr><th>코드</th><th>선택지와 할 일</th><th>차별성</th><th>난이도</th><th>기존 자산</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>회의·미팅 기록</h2>
+  <p class="sub">Notion 회의 일정 및 회의록 탭 기준, 최신순. 코드 버튼을 누르면 위 지도에서 그 선택지가 선택된다.</p>
+  <div class="tl" id="tl" style="margin-top:14px"></div>
+</section>
+
+<section class="rec">
+  <div>
+    <h2>1차 추천 조합: B1 + A1 + A3</h2>
+    <p class="sub" style="margin-bottom:14px">B1을 주제로 두고 A1·A3을 하위 구성 요소로 넣는다. 기존 CBF-QP 설계는 하위 계층에 그대로 남는다.</p>
+    <div class="stack">
+      <div class="layer" style="--c:var(--c-path)"><div class="h">상위 · 통신 품질 기반 경로 재설정<span>B1</span></div><p>격자별 P_out = 1 − PDR 지도. 간선 비용 w = λ1·거리 + λ2·P_out으로 A* 탐색.</p></div>
+      <div class="arrow">경로 ↓　　↑ 재계획 조건 (PDR 차이, CBF 보정 지속)</div>
+      <div class="layer" style="--c:var(--c-avoid)"><div class="h">하위 · 근거리 충돌 회피<span>CBF-QP</span></div><p>명목 명령을 최소로 보정. 6대 기체 간 근거리 충돌 방지.</p></div>
+      <div class="arrow">이웃 위치·속도 ↕</div>
+      <div class="layer" style="--c:var(--c-com)"><div class="h">통신 · 이벤트 트리거 + 지연 여유<span>A1 · A3</span></div><p>위치 변화가 임계값을 넘을 때만 BLE 송신. 패킷 나이(AoI)에 따라 안전거리 확대.</p></div>
+      <div class="data">근거 데이터: BLE 20 m에서 4회 중 1회 28.9% 부족 · UWB 가림 오차 +28.9 cm(사람), +36.1 cm(벽)</div>
+    </div>
+  </div>
+  <div>
+    <h2>고른 이유</h2>
+    <ol class="reasons" style="margin-top:12px">
+      <li>교수님이 제시한 대안 2와 일치한다.</li>
+      <li>제어와 통신이 따로 발전했다는 공백에 해당한다.<small>S2 Gielis 2022, open problem 1</small></li>
+      <li>이미 측정한 BLE 거리별 손실과 UWB 가림 오차를 통신 품질 지도의 근거 데이터로 쓸 수 있다.</li>
+      <li>전역 계획과 근거리 제어를 나누는 계층 구조, 이벤트 트리거 통신의 안정성 조건이 정리돼 있다.<small>S4 Chung 2018, 1절·2.F절</small></li>
+      <li>적은 측정점으로 지도를 만들 수 있어 학부 일정에 맞는다.<small>S3 Muralidharan 2021, 정리 1</small></li>
+    </ol>
+    <p class="note" style="margin-top:18px">C3(명현님 논문 기법)은 답변을 받은 뒤 다시 판단한다. 최종 선택은 팀 논의 후 다음 미팅 전에 확정한다.</p>
+  </div>
+</section>
+</div>
+
+<script>
+const AREAS={"통신":"--c-com","경로":"--c-path","회피":"--c-avoid","하드웨어":"--c-hw","위치":"--c-pos"};
+const LV={"하":0,"중":1,"중상":2,"상":3};
+const PICK=["B1","A1","A3"];
+const D=[
+ ["A1","통신","이벤트 트리거 방송","이웃 위치 변화가 임계값을 넘을 때만 송신 (E1, E2). 서로 멀면 요청하지 않고 일정 거리 이내에서만 요청하는 방식도 가능","중","선행 연구 있음 (Han 2024)","하","BLE 측정 (Task 4), 외삽·이벤트 트리거 시뮬(메시지 98% 감소, 3차 회의)"],
+ ["A2","통신","중앙 우선순위 송신","충돌 위험이 큰 쌍부터 송신 순서 배정 (M2)","중","","중","없음"],
+ ["A3","통신","통신 지연·손실에 강한 안전 여유","패킷 나이(AoI)에 따라 안전거리를 늘림","중상","지연 실험은 선행 사례 없음 (8차 회의 표)","중","E3 설계"],
+ ["A4","통신","센싱 우선·오차 시에만 통신 (하이브리드)","평소엔 기체 센서로 이웃을 추정하고, 예상과 오차가 임계값을 넘을 때(재측위)만 통신을 켬. 복귀 조건(히스테리시스) 설계 포함","상","교수님이 10/15에 같은 방식을 언급, 04 §6의 유력한 차별점 후보","상","기체 카메라 6개 구매 완료, 마커 기반 검출이 유력 (3차 회의), 구현 전"],
+ ["B1","경로","통신 품질 기반 경로 재설정","통신 잘 되는 구역·안 되는 구역 지도를 만들고, 충돌과 통신 품질을 함께 비용에 넣어 경로를 다시 짠다","상","교수님 대안 2","중상","BLE 거리별 손실, UWB 가림 오차"],
+ ["B2","경로","연결성 유지 MAPF","모든 기체가 통신 연결을 유지하는 다중 경로 탐색","중","이론 연구 위주","상","없음"],
+ ["B3","경로","편대 유지","정해진 대형을 유지하며 이동 (Consensus·Virtual Structure 등). 데모는 D·G·U 글자 편대를 경로로 구현","중","교수님: 회피가 먼저, 편대는 그다음","중상","05 §10 Consensus 코드"],
+ ["C1","회피","CBF-QP 그대로 사용","\"경량 알고리즘 사용\"으로 설명","하","교수님이 차별성이 약하다고 함","하","설계 완료"],
+ ["C2","회피","CBF-QP 대 BVC·ORCA·TinyMPC 비교","같은 하드웨어에서 계산 시간·통신량·안전 비교 (TinyMPC는 다중 기체 회피 지원 여부 미확인)","중","","중","STM32N6 측정 (Task 3)"],
+ ["C3","회피","협력 학생(명현님) 논문 기법 적용","논문 기법을 그대로 가져와 적용","?","논문에 따라 다름","?","협업 문의 전 (11/10 숙제 4번)"],
+ ["C4","회피","불확실성 합산 안전 여유 정량화","위치 오차·속도 추종 지연(τ)·통신 지연·패킷 나이를 합쳐 안전거리를 얼마나 잡아야 하는지 측정. Gazebo는 통신 지연을 반영하지 않으므로 지연을 직접 넣어야 함","중상","새 알고리즘 없이도 의미 있는 결과 (05 §7, 교수님: 지연·오차 하 회피가 핵심)","중","02 §5 τ 실험, 11 §6.3 D_eff 식, 8차 회의 E3 설계"],
+ ["C5","회피","교착 탐지·완화","목표에서 먼데 속도≈0이 지속되면 교착으로 판정하고 우선순위·목표 재배정으로 풀기","중","","중","05 §8 탐지 규칙"],
+ ["C6","회피","연산 경량화 지표 (이웃 선별·연산 단순화·메모리·전력)","이웃 선별·거리 제곱 비교로 계산 시간 곡선을 만들고, 메모리·전력까지 측정","중","메모리·전력은 선행 사례 없음 (8차 회의, 차별 지표 후보). 6대에선 이웃 선별 효과 거의 없음 (06 §3)","하","STM32N6 측정 (Task 3), 06 §3 공간 해시 코드"],
+ ["C7","회피","CBF+AI (학습 기반 명목 제어기 + CBF 필터)","학습 모델이 목표 도달을 만들고 안전은 고전 CBF가 보장 (GCBF+ 계열 참고)","상","교수님 9/18: 고도화한다면 CBF+AI (선택)","상","GCBF+ 공개 코드"],
+ ["C8","회피","회피 방식 비교 (정지·수평 우회·고도 분리)","같은 시나리오에서 회피 방식별 성공률·복귀 시간 비교 (E6). 밀집 상황 대응 포함","중","","중","8차 회의 E6 설계, 05 §8 교착 완화"],
+ ["D1","하드웨어","센서 구성 경량화","센서를 빼며 성능 유지 확인 (E4). 구성 4단계: UWB / +ZED / +기체 카메라 / 둘 다, 구현은 역순 (6차 회의)","하","교수님 기대(알고리즘 개선)와 다를 수 있음","하","부품 테스트"],
+ ["E1","위치","UWB 가림 보정","사람 몸·벽 가림 오차(+28.9 cm, +36.1 cm)를 보정","중","","중","Task 1 데이터"],
+ ["E2","위치","고정 ZED 2i 기반 위치 (UWB 대안·참값)","고정 ZED 2i와 바닥 기준점으로 전 기체 좌표를 얻음. UWB가 위치 RMSE 0.15 m를 못 넘으면 대안, 넘으면 보조 참값. SLAM으로 world 좌표를 미리 만드는 방법도 교수님이 제안","중","교수님 10/15: 정확한 트래킹은 비전이 가장 깔끔. 천장 360° 카메라는 폐기 (10/12)","상","ZED 2i 4mm 3대 보유 (8×8 m 한계), 식별 마커 구매 예정"]
+].map(r=>({code:r[0],area:r[1],name:r[2],todo:r[3],diff:r[4],diffNote:r[5],hard:r[6],asset:r[7]}));
+
+const SRC={A1:"10/15 교수님 미팅, 9/28 3차, 11/2 8차(E1·E2)",A2:"10/15 교수님 미팅(중앙은 우선순위 담당), 11/2 8차(M2)",A3:"9/18 교수님 미팅(지연·오차 하 회피가 핵심), 11/2 8차(E3)",A4:"10/15 교수님 미팅, 9/28 3차",B1:"11/10 교수님 미팅(대안 2)",B2:"11/10 숙제 3번 조사",B3:"9/18·10/15 교수님 미팅",C1:"11/10 교수님 미팅(차별성 약함)",C2:"9/18 교수님 미팅(TinyMPC 참고), 10/15(MCU M4·M7)",C3:"11/10 교수님 미팅(대안 1)",C4:"9/18 교수님 미팅, 10/15(Gazebo 지연 미반영)",C5:"회의록에 언급 없음 (학습자료 05 §8)",C6:"11/2 8차(전력·메모리 지표)",C7:"9/18 교수님 미팅(고도화 선택)",C8:"11/2 8차(E6)",D1:"10/19 6차(센서 4단계), 11/10 교수님 미팅",E1:"11/10 미팅 보고(Task 1)",E2:"10/12 6주차(360° 폐기), 10/15 교수님 미팅, 11/2 8차"};
+const col=a=>`var(${AREAS[a]})`;
+let filter=null, sel="B1";
+const $=id=>document.getElementById(id);
+
+const parts=t=>(t||"").split(/,\s(?![^(]*\))/).filter(Boolean);
+const ul=a=>a.length?`<ul>${a.map(x=>`<li>${x}</li>`).join("")}</ul>`:`<span class="sub">-</span>`;
+function lv(v){
+  if(!(v in LV)) return `<span class="lv"><em>논문에 따라 다름</em></span>`;
+  return `<span class="lv">${[0,1,2,3].map(i=>`<i class="${i<=LV[v]?"on":""}"></i>`).join("")}<em>${v}</em></span>`;
+}
+
+// legend
+for(const a in AREAS){
+  const b=document.createElement("button");
+  b.style.setProperty("--c",col(a));
+  b.innerHTML=`<span class="dot"></span>${a}`;
+  b.setAttribute("aria-pressed","false");
+  b.onclick=()=>{filter=filter===a?null:a;render()};
+  b.dataset.area=a;
+  $("legend").append(b);
+}
+
+// flow map: 노드(단계) 위치 + 영향 화살표
+const STAGES=[
+ {id:"sensor",n:"센서",d:"ToF·광학 흐름·기체 카메라",areas:["하드웨어"],r:1,c:1},
+ {id:"pos",n:"위치 추정",d:"UWB 앵커 월드 프레임",areas:["위치"],r:1,c:2},
+ {id:"env",n:"환경",d:"사람·벽·거리·조명 (기체 밖)",areas:[],r:1,c:3,env:1},
+ {id:"comm",n:"통신",d:"BLE(nRF52840)로 이웃과 공유",areas:["통신"],r:2,c:2},
+ {id:"motor",n:"모터·기체",d:"명령대로 움직임",areas:[],r:3,c:1},
+ {id:"avoid",n:"충돌 회피",d:"STM32N6에서 CBF-QP",areas:["회피"],r:3,c:2},
+ {id:"path",n:"경로 계획",d:"목표까지 전역 경로",areas:["경로"],r:3,c:3}
+];
+// [from,to,label,되먹임?]
+const EDGES=[
+ ["sensor","pos","측정값"],
+ ["env","pos","사람·벽 가림 오차"],
+ ["env","comm","거리별 패킷 손실"],
+ ["pos","comm","내 위치 방송"],
+ ["comm","path","통신 품질(PDR) 지도"],
+ ["comm","avoid","이웃 위치·속도, 패킷 나이"],
+ ["path","avoid","명목 경로·명령"],
+ ["avoid","path","보정 지속 시 재계획",1],
+ ["avoid","comm","위험 쌍 → 송신 순서·조건",1],
+ ["avoid","motor","보정된 명령"],
+ ["motor","sensor","기체 움직임",1]
+];
+const stageOf=code=>STAGES.find(s=>s.areas.includes(D.find(o=>o.code===code).area)).id;
+let selNode=stageOf(sel);
+const F=$("flow");
+STAGES.forEach(st=>{
+  const nd=document.createElement("button");nd.className="node"+(st.env?" env":"");nd.dataset.id=st.id;
+  nd.style.gridRow=st.r;nd.style.gridColumn=st.c;
+  if(st.areas[0]) nd.style.setProperty("--c",col(st.areas[0]));
+  const n=D.filter(o=>st.areas.includes(o.area)).length;
+  nd.innerHTML=`<span class="n">${st.n}</span><small>${st.d}</small><span class="ct">${n?`선택지 ${n}개`:"선택지 없음"}</span>`;
+  nd.onclick=()=>{selNode=st.id;render()};
+  F.append(nd);
+});
+const NS="http://www.w3.org/2000/svg";
+const svg=document.createElementNS(NS,"svg");svg.id="edges";
+svg.innerHTML=`<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>`;
+F.append(svg);
+const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+function clip(p0,p1,r){ // 선분이 사각형 r 안에 있는 t 구간
+  let t0=0,t1=1;const d={x:p1.x-p0.x,y:p1.y-p0.y};
+  for(const [o,dd,lo,hi] of [[p0.x,d.x,r.l,r.r],[p0.y,d.y,r.t,r.b]]){
+    if(Math.abs(dd)<1e-9){if(o<lo||o>hi)return null;continue}
+    let a=(lo-o)/dd,b=(hi-o)/dd;if(a>b)[a,b]=[b,a];t0=Math.max(t0,a);t1=Math.min(t1,b);
+  }
+  return t0>t1?null:[t0,t1];
+}
+function drawEdges(){
+  svg.querySelectorAll(".e,.lb").forEach(e=>e.remove());
+  const fr=F.getBoundingClientRect();
+  svg.setAttribute("width",F.scrollWidth);svg.setAttribute("height",F.scrollHeight);
+  const R={};
+  F.querySelectorAll(".node").forEach(n=>{const b=n.getBoundingClientRect();R[n.dataset.id]={l:b.left-fr.left-2,r:b.right-fr.left+2,t:b.top-fr.top-2,b:b.bottom-fr.top+2}});
+  const has=(a,b)=>EDGES.some(e=>e[0]===b&&e[1]===a);
+  EDGES.forEach(([a,b,label,fb])=>{
+    const A=R[a],B=R[b];
+    const ca={x:(A.l+A.r)/2,y:(A.t+A.b)/2},cb={x:(B.l+B.r)/2,y:(B.t+B.b)/2};
+    const dx=cb.x-ca.x,dy=cb.y-ca.y,L=Math.hypot(dx,dy);
+    const off=has(a,b)?30:0; // 양방향이면 평행하게 벌림
+    const px=-dy/L*off,py=dx/L*off;
+    const p0={x:ca.x+px,y:ca.y+py},p1={x:cb.x+px,y:cb.y+py};
+    const ia=clip(p0,p1,A),ib=clip(p0,p1,B);
+    const ta=ia?ia[1]:0,tb=ib?ib[0]:1;
+    const s0={x:p0.x+(p1.x-p0.x)*ta,y:p0.y+(p1.y-p0.y)*ta},s1={x:p0.x+(p1.x-p0.x)*tb,y:p0.y+(p1.y-p0.y)*tb};
+    const ln=mk("line",{x1:s0.x,y1:s0.y,x2:s1.x,y2:s1.y,class:"e"+(fb?" fb":""),"marker-end":"url(#ah)"});
+    ln.dataset.from=a;ln.dataset.to=b;svg.append(ln);
+    const lt=off&&Math.abs(dy)>Math.abs(dx)?0.28:0.5;const g=mk("g",{class:"lb"});g.dataset.from=a;g.dataset.to=b;
+    const t=mk("text",{x:s0.x+(s1.x-s0.x)*lt,y:s0.y+(s1.y-s0.y)*lt+4,"text-anchor":"middle"});t.textContent=label;
+    const rc=mk("rect",{rx:4});g.append(rc,t);svg.append(g);
+    const bb=t.getBBox();
+    rc.setAttribute("x",bb.x-5);rc.setAttribute("y",bb.y-2);rc.setAttribute("width",bb.width+10);rc.setAttribute("height",bb.height+4);
+  });
+  applyHi();
+}
+function applyHi(){
+  F.querySelectorAll(".node").forEach(n=>{
+    const st=STAGES.find(x=>x.id===n.dataset.id);
+    n.classList.toggle("on",n.dataset.id===selNode);
+    n.classList.toggle("fl",!!filter&&!st.areas.includes(filter));
+  });
+  svg.querySelectorAll(".e,.lb").forEach(e=>{
+    const hit=e.dataset.from===selNode||e.dataset.to===selNode;
+    e.classList.toggle("hi",hit);e.classList.toggle("lo",!hit);
+  });
+}
+addEventListener("resize",drawEdges);
+document.fonts&&document.fonts.ready.then(drawEdges);
+
+// table
+let lastArea=null;
+D.forEach(o=>{
+  if(o.area!==lastArea){
+    lastArea=o.area;
+    const g=document.createElement("tr");g.className="grp";g.dataset.area=o.area;g.style.setProperty("--c",col(o.area));
+    g.innerHTML=`<td colspan="5">${o.area} · ${D.filter(x=>x.area===o.area).length}개</td>`;
+    $("tbody").append(g);
+  }
+  const tr=document.createElement("tr");tr.className="row";tr.dataset.code=o.code;tr.style.setProperty("--c",col(o.area));
+  tr.innerHTML=`<td class="code"><span>${o.code}</span></td>
+    <td><span class="nm">${o.name}</span><span class="td">${o.todo}</span></td>
+    <td>${lv(o.diff)}${o.diffNote&&o.diff!=="?"?`<span class="sub">${o.diffNote}</span>`:""}</td>
+    <td>${lv(o.hard)}</td>
+    <td class="as">${parts(o.asset).join("<br>")}</td>`;
+  tr.onclick=()=>{sel=o.code;selNode=stageOf(o.code);render();$("detail").scrollIntoView({behavior:"smooth",block:"center"})};
+  $("tbody").append(tr);
+});
+
+const nm=i=>STAGES.find(x=>x.id===i).n;
+function renderPanel(){
+  const st=STAGES.find(x=>x.id===selNode), P=$("panel");
+  const opts=D.filter(o=>st.areas.includes(o.area));
+  P.innerHTML=`<div class="ph"><b>${st.n}</b><span>${st.d}</span></div>`;
+  if(!opts.length) P.insertAdjacentHTML("beforeend",`<div class="empty">이 단계에는 개선 선택지가 없다. 아래는 이 단계와 연결된 영향이다.</div>`);
+  opts.forEach(o=>{
+    const b=document.createElement("button");
+    b.className="opt"+(o.code===sel?" sel":"")+(filter&&o.area!==filter?" fl":"");
+    b.style.setProperty("--c",col(o.area));
+    b.innerHTML=`<span class="l1"><b>${o.code}</b><span>${o.name}</span>${PICK.includes(o.code)?`<span class="pk">추천</span>`:""}</span><span class="l2">차별성 ${o.diff==="?"?"미정":o.diff} · 난이도 ${o.hard==="?"?"미정":o.hard}</span>`;
+    b.onclick=()=>{sel=o.code;render()};
+    P.append(b);
+  });
+  const inn=EDGES.filter(e=>e[1]===selNode).map(e=>`<li>${nm(e[0])} → ${e[2]}</li>`).join("");
+  const out=EDGES.filter(e=>e[0]===selNode).map(e=>`<li>${e[2]} → ${nm(e[1])}</li>`).join("");
+  P.insertAdjacentHTML("beforeend",`<div class="infl"><div><h5>받는 영향</h5><ul>${inn}</ul></div><div><h5>주는 영향</h5><ul>${out}</ul></div></div>`);
+}
+
+function render(){
+  document.querySelectorAll(".legend button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.area===filter)));
+  const area=c=>D.find(o=>o.code===c).area;
+  document.querySelectorAll("#tbody tr").forEach(tr=>{
+    tr.classList.toggle("dim",!!filter&&(tr.dataset.area||area(tr.dataset.code))!==filter);
+    tr.classList.toggle("sel",tr.dataset.code===sel);
+  });
+  renderPanel();
+  const o=D.find(x=>x.code===sel), d=$("detail");
+  d.style.setProperty("--c",col(o.area));
+  d.innerHTML=`<div class="dh"><span class="cd">${o.code}</span><h3>${o.name}</h3><span class="pill">${o.area}</span>${PICK.includes(o.code)?`<span class="pill rc">추천 조합</span>`:""}</div>
+   <div class="dg">
+     <div><h4>할 일</h4><p>${o.todo}</p></div>
+     <div class="mt">
+       <div><h4>차별성</h4>${lv(o.diff)}${o.diffNote&&o.diff!=="?"?`<div class="sub mn">${o.diffNote}</div>`:""}</div>
+       <div><h4>난이도</h4>${lv(o.hard)}</div>
+     </div>
+     <div><h4>기존 자산</h4>${ul(parts(o.asset))}</div>
+     <div><h4>회의 근거</h4>${ul(parts(SRC[o.code]))}</div>
+   </div>`;
+  applyHi();
+}
+// 회의·미팅 기록 (Notion 회의록 탭)
+const TL=[
+ ["11/10","교수님 미팅 (2차 미팅록)",["충돌 회피는 연구가 거의 끝난 분야라 CBF-QP로 차별성을 내기 어렵다. 새 알고리즘 경량화가 아니라 '경량화된 알고리즘 사용'으로 설명 가능","대안 1: 협력 학생(명현님) 논문 기법 적용. 대안 2: 응용 단계에서 새로움 찾기 (충돌 + 통신 품질을 함께 고려한 다수 로봇 경로 재설정)","경로 재설정이 충돌 회피보다 상위 개념, 충돌 회피는 근거리 대응","하드웨어·통신 횟수 줄이는 경량화는 교수님 기대(알고리즘 개선)와 다를 수 있음","숙제: 서베이 리뷰, 전체 선택지 표 후 하나 선택, 통신 품질 경로 연구 조사, 명현님 협업 문의","비행 가능 여부 미확인(최대 우려), PCB 미도착, 주말 납땜 후 제작"],["B1","C1","C3","D1"]],
+ ["11/10","하드웨어 테스트 현황 (미팅 보고 자료)",["UWB 앵커 LOS 1~20 m 오차 -0.6~+2.0 cm, 사람 몸 가림 +28.9 cm, 콘크리트 벽 +36.1 cm","BLE 20 m에서 4번 중 1번 28.9% 부족, 1·5·10 m 손실 0","STM32N6 12×12 행렬곱 4.7 µs, DWM3000EVB 레인징·EVB↔CDK 호환은 미확인"],["E1","B1","C2"]],
+ ["11/06","9차 회의",["벤치 테스트 T1~T7 (UWB 거리·위치·z축, STM32N6 QP 시간, nRF52840 통신, ZED 정확도, 로그)","5×5 m 구역에서 시작, PCB 미제작이라 지상·책상 위 시험 중심"],["E1","E2"]],
+ ["11/02","8차 회의",["환경: 물류센터를 15×15 m로 축소. 경량화 근거는 기체당 작업량·비행 시간","실험 E1 통신 방식, E2 이벤트 임계값, E3 통신 지연, E4 센서 구성, E5 규모, E6 회피 방식","좌표계: UWB 앵커 3개로 월드 프레임 정의, 실패 시 고정 ZED 2i (8×8 m 이내). 천장 360° 카메라 폐기","메모리·전력 지표는 선행 사례 없음 (차별 지표 후보)"],["A1","A2","A3","D1","E2","C6","C8"]],
+ ["10/19","6차 회의",["부품 확정: STM32N6 7, DWM3000EVB 7, 앵커 3, XIAO nRF52840 7 + 동글, 기체 카메라 6, VL53L1X 5","센서 구성 4단계(UWB / +ZED / +기체 카메라 / 둘 다), 구현은 역순. 시나리오: 편대 중 고정 장애물 회피, 접근하는 드론 회피"],["D1"]],
+ ["10/15","교수님 미팅 (2차 미팅)",["UWB는 논문처럼 안 되는 경우가 많음. 정확한 트래킹은 고정 ZED 2i 비전이 가장 깔끔, UWB+ZED 둘 다 해보는 것 환영","이벤트 통신: 서로 멀면 요청 안 함, 평소엔 기체 센서로 추정하고 재측위 때만 요청. 중앙은 전체 경로·우선순위 담당","Gazebo는 통신 지연을 반영하지 않음. 지연을 가정해야 현실 이슈가 보임","데모가 가장 임팩트 있음: 앱 지도 경로 지정 + 회피, D·G·U 글자 편대. 시나리오 2~3개가 현실적","MCU(M4/M7) 경량화, ToF는 그대로 사용"],["E2","A1","A2","A4","C4","B3","D1"]],
+ ["09/28","3차 회의 (통신·비전 스터디)",["외삽으로 평균 오차 10배 이상 감소, 이벤트 트리거로 메시지 98% 감소(3000→61개). 병목은 대역폭이 아니라 지연·손실·지터","이웃 위치: 보이는 이웃은 비전, 안 보이는 이웃은 통신. 마커 기반(AprilTag·ArUco) 검출이 가장 유력"],["A1","A3","A4"]],
+ ["09/18","교수님 1차 미팅 (9/21 2차 회의록에 정리)",["회피는 전통 알고리즘(APF·CBF), 딜레이·오차가 있는 상황에서 어떻게 피할지가 핵심","직접 제작 6대, 센서 최소화(카메라 1개), 연산은 각 기체에서. 고도화한다면 CBF+AI. 참고 논문 TinyMPC"],["A3","C4","C2","C7"]],
+ ["09/15","팀 1차 회의",["주제: 다수 드론 충돌 회피 및 편대 유지 경량 제어. 경량화의 의미(연산량 감소, 이웃 선별, 가속, 통신·주기 감소) 정리"],["C6"]]
+];
+const tl=$("tl");
+TL.forEach(([d,t,pts,codes])=>{
+  const it=document.createElement("div");it.className="it";
+  it.innerHTML=`<div class="d">${d}</div><h3>${t}</h3><ul>${pts.map(x=>`<li>${x}</li>`).join("")}</ul>`;
+  const tg=document.createElement("div");tg.className="tg";
+  codes.forEach(c=>{const o=D.find(x=>x.code===c);const b=document.createElement("button");b.textContent=c;b.title=o.name;b.style.setProperty("--c",col(o.area));b.onclick=()=>{sel=c;selNode=stageOf(c);render();$("detail").scrollIntoView({behavior:"smooth",block:"center"})};tg.append(b)});
+  it.append(tg);tl.append(it);
+});
+
+render();drawEdges();
+</script>
