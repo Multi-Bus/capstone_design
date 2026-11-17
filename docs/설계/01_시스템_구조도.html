@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>드론 내부 데이터 흐름도</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* layout: 단일 컬럼. 흐름도(부품·연결) → 선택한 연결 상세 → N6 내부 계층 → 한 주기 순서 → 전체 연결 표 */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#d9dde4; --grid:#eceff3;
+  --accent:#1f5fbf; --accent-soft:#e3ecfa;
+  --c-pos:#a16207; --c-obs:#0f8a6a; --c-com:#1f6fd1; --c-ctl:#c2410c; --c-log:#7a5af0;
+  --sans:"IBM Plex Sans KR",system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --fg:#e6e9ef; --muted:#9aa3b2; --line:#2d3542; --grid:#222936;
+  --accent:#7aa8f0; --accent-soft:#1f2c42;
+  --c-pos:#e0b04a; --c-obs:#4cc9a4; --c-com:#6aa6f2; --c-ctl:#f08a5a; --c-log:#a892ff; color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 16px 56px;display:flex;flex-direction:column;gap:36px}
+h1{font-size:1.75rem;margin:0;letter-spacing:-.01em}
+h2{font-size:1.2rem;margin:0 0 4px}
+p{margin:0;max-width:72ch}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sub{color:var(--muted);font-size:.9rem}
+header{display:flex;flex-direction:column;gap:8px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.legend button{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.legend button[aria-pressed="true"]{border-color:var(--fg)}
+button:focus-visible,tr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.keyline{display:flex;gap:18px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin-top:8px}
+.keyline svg{vertical-align:middle}
+.explore{display:grid;grid-template-columns:1fr;gap:16px;margin-top:12px}
+.flow-box{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.flow{box-sizing:border-box;display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:150px 190px;min-width:1130px;padding:28px;position:relative}
+.node{font:inherit;color:var(--fg);text-align:left;cursor:pointer;position:relative;border:1.5px solid var(--line);border-left:5px solid var(--c,var(--line));border-radius:10px;background:var(--bg);padding:9px 11px;display:flex;flex-direction:column;gap:2px;z-index:1;transition:opacity .15s,box-shadow .15s}
+.node.env{border-style:dashed}
+.node.core{background:var(--accent-soft)}
+.node.fl{opacity:.3}
+.node.on{border-color:var(--accent);border-left-color:var(--c);box-shadow:0 0 0 3px var(--accent-soft)}
+.node .n{font-weight:700}
+.node small{color:var(--muted);font-size:.76rem;line-height:1.35}
+#edges{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:visible}
+#edges .e{fill:none;stroke:var(--c);stroke-width:1.6;transition:opacity .15s}
+#edges .e.hi{stroke-width:3}
+#edges .e.lo,#edges .lb.lo{opacity:.35}
+#edges .lb rect{fill:var(--surface);stroke:var(--line)}
+#edges .lb text{fill:var(--fg);font-size:11px;font-family:var(--sans)}
+#edges .lb text .h{font-weight:700}
+#edges .lb.hi rect{stroke:var(--c);stroke-width:1.6}
+#edges marker path{fill:context-stroke}
+.panel{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel .ph{display:flex;flex-direction:column;gap:2px}
+.panel .ph b{font-size:1.1rem}
+.panel .ph span{font-size:.8rem;color:var(--muted)}
+.pg{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.panel h5{margin:0 0 4px;font-size:.72rem;color:var(--muted);font-weight:500;letter-spacing:.05em}
+.opt{font:inherit;color:var(--fg);text-align:left;cursor:pointer;border:1px solid var(--line);border-left:4px solid var(--c);border-radius:8px;background:var(--bg);padding:7px 10px;display:flex;flex-direction:column;gap:1px;margin-bottom:6px;width:100%;box-sizing:border-box}
+.opt .l1{font-size:.84rem;line-height:1.4}
+.opt .l2{font-size:.74rem;color:var(--muted)}
+.opt.sel{border-color:var(--accent);border-left-color:var(--c);background:var(--accent-soft)}
+.opt.fl{opacity:.3}
+.detail{border:1px solid var(--line);border-left:6px solid var(--c);background:var(--surface);border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:18px}
+.dh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dh .cd{font-family:var(--mono);font-weight:600;background:var(--c);color:var(--surface);border-radius:6px;padding:2px 10px}
+.dh h3{margin:0;font-size:1.25rem;flex:1 1 260px}
+.pill{font-size:.75rem;border:1px solid var(--line);border-radius:999px;padding:1px 10px;color:var(--muted)}
+.dg{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px 32px}
+@media (max-width:760px){.dg{grid-template-columns:1fr}}
+.dg h4{margin:0 0 6px;font-size:.74rem;font-weight:500;color:var(--muted);letter-spacing:.06em}
+.dg ul,.dg ol{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px;font-size:.9rem}
+.dg p{font-size:.92rem}
+.stack{display:flex;flex-direction:column;gap:8px;max-width:760px}
+.layer{border:1.5px solid var(--c);border-radius:8px;padding:12px 14px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.layer .h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-weight:700}
+.layer .h span{font-family:var(--mono);font-size:.75rem;color:var(--c);font-weight:600}
+.layer p{font-size:.86rem;color:var(--muted)}
+.eq{margin:6px 0 0;padding-left:1.1em;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
+.eq small{display:block;color:var(--muted);font-size:.78rem}
+.eqline{font-family:var(--mono);font-size:.84rem;color:var(--fg)!important;margin:4px 0}
+pre.ex{margin:0;padding:12px 14px;background:var(--bg);border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:.82rem;overflow-x:auto}
+.arrow{text-align:center;color:var(--muted);font-size:.8rem;font-family:var(--mono)}
+.tl{display:flex;flex-direction:column;border-left:2px solid var(--line);margin-left:6px}
+.tl .it{position:relative;padding:0 0 16px 18px}
+.tl .it::before{content:"";position:absolute;left:-6px;top:7px;width:10px;height:10px;border-radius:50%;background:var(--c)}
+.tl .d{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.tl h3{font-size:.98rem;margin:0}
+.tl ul{margin:4px 0 0;padding-left:1.1em;font-size:.88rem}
+.table-box{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin-top:12px}
+table{border-collapse:collapse;width:100%;min-width:860px;table-layout:fixed;font-size:.84rem}
+th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--grid)}
+th{font-size:.74rem;color:var(--muted);font-weight:500;background:var(--bg);border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--grid)}
+tr.sel td,tr.sel:hover td{background:var(--accent-soft)}
+tr.dim td{opacity:.3}
+td.code span{font-family:var(--mono);font-weight:600;color:var(--c);border:1.5px solid var(--c);border-radius:6px;padding:1px 7px}
+.st{font-size:.72rem;border-radius:4px;padding:0 6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.note{font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="eyebrow">시스템 구조도 · 기체 1대 · 2026-11-17</span>
+  <h1>드론 내부 데이터 흐름도</h1>
+  <p class="sub">부품 사이를 오가는 데이터가 어떤 형태이고, 어디서 어떻게 전처리되어 다음 부품으로 가는지 한 장에 모았다. 부품을 누르면 오른쪽에 받는 것 · 보내는 것이 나오고, 화살표나 표의 행을 누르면 아래에 전처리 단계가 나온다. 영역 버튼으로 걸러 볼 수 있다.</p>
+  <div class="legend" id="legend"></div>
+</header>
+
+<section>
+  <h2>① 부품 · 연결 · 데이터 흐름</h2>
+  <p class="sub">화살표 위 굵은 글씨는 보내는 데이터, 그 아래는 전처리다. 점선 테두리는 기체 밖이다. 회색 배경은 컴패니언(N6)이다.</p>
+  <div class="keyline"><span><svg width="34" height="8"><line x1="0" y1="4" x2="34" y2="4" stroke="currentColor" stroke-width="1.6"/></svg> 데이터 방향</span><span>선 색 = 영역</span><span>상태 표기: 실측 / 확인 / 추정 / 미확인</span></div>
+  <div class="explore">
+    <div class="flow-box"><div class="flow" id="flow"></div></div>
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
+</section>
+
+<section class="detail" id="detail" aria-live="polite"></section>
+
+<section>
+  <h2>② N6 내부 소프트웨어 계층: 값의 조합과 연산</h2>
+  <p class="sub">N6 안에서 값이 다음 단계로 넘어갈 때 어떤 값들을 조합해 무슨 연산을 하는지다. 이해가 목적이라 기호 대신 말로 적었다. 연산 시간은 모두 미측정이다. 편대 제어와 안전 필터의 인터페이스는 "원하는 속도 → 안전 속도" 함수 하나라 회피 알고리즘(CBF / ORCA / APF)을 바꿔 끼울 수 있다.</p>
+  <div class="stack" style="margin-top:12px">
+    <div class="layer" style="--c:var(--c-pos)"><div class="h">① 입력 만들기<span>IN</span></div>
+      <ul class="eq">
+        <li><b>이웃 예측 위치</b> = 이웃이 보낸 위치 + 이웃 속도 × (지금 시각 − 이웃이 보낸 시각) <small>패킷이 오는 동안 이웃이 움직인 만큼을 더한다 (외삽). 시계 오프셋 보정 포함</small></li>
+        <li><b>정보 나이</b> = 지금 시각 − 마지막으로 받은 시각 <small>기준을 넘으면 낡은 정보(stale)</small></li>
+        <li><b>장애물 위치</b> = 내 위치 + 자세로 돌린 (센서 방향 × ToF 거리 + 센서 장착 위치) <small>status가 정상이 아니면 버림, 이웃 근처면 이웃으로 연결</small></li>
+        <li><b>내 위치 · 속도 · 자세</b> <small>UWB 위치 + 광류 속도 + IMU를 FC가 융합해 회신 (N6는 연산 안 함)</small></li>
+      </ul></div>
+    <div class="arrow">↓</div>
+    <div class="layer" style="--c:var(--c-ctl)"><div class="h">② 편대 제어 (Consensus)<span>원하는 속도</span></div>
+      <p class="eqline">원하는 속도 = 편대 이동 속도 + 이웃마다 [ 맞추는 강도 × (실제 상대 위치 − 대형이 요구하는 상대 위치) ]의 합</p>
+      <p>조합 값: 편대 이동 속도, 내 위치, 이웃 예측 위치, 역할 번호로 정한 대형 위치, 맞추는 강도. 대형이 이미 맞으면 보정이 0이라 편대 이동 속도만 남는다. 목표점으로 가는 편대 이동 속도 산출식은 [제안]이며 확정 전이다.</p></div>
+    <div class="arrow">원하는 속도 ↓</div>
+    <div class="layer" style="--c:var(--c-obs)"><div class="h">③ 제약 만들기 → ④ 안전 속도 고르기<span>안전 속도</span></div>
+      <ul class="eq">
+        <li><b>이웃 안전거리</b> = 기본 거리 + 내 위치 오차 + 이웃 위치 오차 + 상대속도 상한 × 정보 나이 + 시계 오차 <small>정보가 낡을수록 거리를 넓힌다</small></li>
+        <li><b>이웃 접근 조건</b> 여유 = (이웃과의 거리)² − 안전거리². 이웃에서 나를 향한 방향으로의 내 속도가 (이웃의 같은 방향 속도 − ½ × 감쇠 계수 × 여유)보다 작아지지 않게 한다 <small>여유가 작을수록 접근을 더 강하게 막는다</small></li>
+        <li><b>장애물 접근 조건</b> 이웃과 같은 방식. 장애물은 정지해 있어 장애물 속도가 0</li>
+        <li><b>속도 상한</b> 속도 크기가 최대 속도를 넘지 않게 한다</li>
+        <li><b>안전 속도 고르기 (QP)</b> 제약을 모두 지키는 속도 중 원하는 속도에 가장 가까운 것. 제약 수 = 이웃 수 + 장애물 점 수 + 1</li>
+        <li><b>해가 없으면</b> 감속하거나 멈춘다. 교착 지표로 센다</li>
+      </ul></div>
+    <div class="arrow">안전 속도 ↓</div>
+    <div class="layer" style="--c:var(--c-com)"><div class="h">⑤ 명령 출력 · ⑥ 송신 판단<span>OUT</span></div>
+      <ul class="eq">
+        <li><b>명령</b> 안전 속도(방 좌표)를 FC 좌표(NED)로 바꿔 [제안] (북쪽 = 방 y축, 동쪽 = 방 x축, 아래 = −높이) MAVLink 속도 명령으로 보낸다. 20 ~ 50 Hz</li>
+        <li><b>송신 판단</b> 예상 위치 = 마지막에 보낸 위치 + 마지막에 보낸 속도 × 경과 시간. 실제 위치와 예상 위치의 차이가 임계값을 넘으면 내 상태 64 B를 방송한다 <small>임계값은 이웃 쪽 안전거리에 "이웃 위치 오차"로 더해진다</small></li>
+      </ul></div>
+  </div>
+  <div class="detail" style="--c:var(--c-ctl);margin-top:16px;max-width:760px">
+    <div class="dh"><span class="cd">예시</span><h3>계산 예시 (설명용 가정값)</h3></div>
+    <p class="sub">한 이웃이 내 쪽으로 다가오는 상황. 내 위치 (0, 0), 이웃 예측 위치 (1.2, 0), 이웃 속도 (−0.5, 0), 원하는 속도 (1.0, 0), 안전거리 0.85 m, 감쇠 계수 1. 측정값이 아니다.</p>
+    <pre class="ex">여유 = 1.2² − 0.85² = 1.44 − 0.7225 = 0.7175
+이웃에서 나를 향한 방향 = (−1.2, 0)
+허용 기준 = (−1.2)(−0.5) − ½ × 1 × 0.7175 = 0.2413
+조건: (−1.2) × (내 x속도) ≥ 0.2413  →  내 x속도 ≤ −0.201
+원하는 속도 (1.0, 0)은 조건을 어긴다
+조건을 지키는 속도 중 가장 가까운 것  →  안전 속도 = (−0.201, 0)</pre>
+    <p class="sub">안전거리 여유(1.2 − 0.85 = 0.35 m)가 작고 서로 접근하면 전진 명령이 후퇴 명령으로 바뀐다. 이웃이 멀거나 멀어지면 조건이 느슨해서 원하는 속도가 그대로 통과한다.</p>
+  </div>
+  <p class="note" style="margin-top:14px">속도 명령이 즉시 실현된다고 가정한다. 실제로는 속도 추종 지연만큼 늦어 안전거리와 최대 속도로 보상한다(지연 미측정). N6용 QP 솔버 선정과 1주기 시간은 미측정이다. 식은 평면(2D)으로 적었고 3D 확장은 미정이다.</p>
+</section>
+
+<section>
+  <h2>③ 한 제어 주기의 순서</h2>
+  <p class="sub">위 데이터가 한 주기 안에서 움직이는 순서다. 구간별 지연은 <a href="../하드웨어/05_지연_분석.md">지연 분석</a>에 있다.</p>
+  <div class="tl" id="tl" style="margin-top:14px"></div>
+</section>
+
+<section>
+  <h2>④ 전체 연결 표</h2>
+  <p class="sub">행을 누르면 위 상세가 바뀐다.</p>
+  <div class="table-box">
+    <table>
+      <colgroup><col style="width:56px"><col style="width:150px"><col style="width:28%"><col style="width:30%"><col style="width:120px"><col style="width:70px"></colgroup>
+      <thead><tr><th>코드</th><th>구간</th><th>데이터 형태</th><th>전처리</th><th>주기</th><th>상태</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:14px">수치는 [실측] 벤치, [확인] 문서 출처, [추정] [가정] 계산이다. 실기체 비행 전이라 대부분 설계값이다. 근거: <a href="../하드웨어/03_부품별_입출력과_연산.md">입출력 연결</a>, <a href="../하드웨어/04_전처리_보정.md">전처리 보정</a>.</p>
+</section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const AREAS={"위치":"--c-pos","장애물":"--c-obs","통신":"--c-com","제어":"--c-ctl","기록":"--c-log"};
+const col=a=>`var(${AREAS[a]})`;
+let filter=null, selNode="n6", selEdge="L2";
+
+// 부품 노드. r,c = 격자 위치
+const NODES=[
+ {id:"anc",n:"UWB 앵커 ×3",d:"DWM3001CDK, 방 모서리 고정",a:"위치",r:1,c:1,env:1},
+ {id:"uwb",n:"UWB 태그",d:"DWM3000EVB",a:"위치",r:1,c:2},
+ {id:"tof",n:"ToF ×5 + MUX",d:"VL53L1X, TCA9548A",a:"장애물",r:1,c:3},
+ {id:"cam",n:"카메라 (후순위)",d:"VD66GY, 제어 입력 아님",a:"장애물",r:1,c:4},
+ {id:"nbr",n:"이웃 드론 · 동글",d:"BLE 상대편",a:"통신",r:2,c:1,env:1},
+ {id:"ble",n:"XIAO nRF52840",d:"BLE 송수신",a:"통신",r:2,c:2},
+ {id:"n6",n:"N6 컴패니언",d:"STM32N6 · 전처리 + 편대 + CBF-QP",a:"제어",r:2,c:3,core:1},
+ {id:"sd",n:"SD · LED 마커",d:"microSD, WS2812B",a:"기록",r:2,c:4},
+ {id:"fc",n:"FC",d:"H743, EKF + 속도 루프",a:"제어",r:3,c:3},
+ {id:"flow",n:"MTF-01",d:"광류 + 하향 거리",a:"위치",r:3,c:4},
+ {id:"motor",n:"ESC · 모터 ×4",d:"추력",a:"제어",r:4,c:3}
+];
+
+// 연결. label = 화살표 위 글(첫 줄 굵게). steps = 전처리 순서
+const E=[
+ {id:"L1",f:"anc",t:"uwb",a:"위치",label:["UWB 응답 프레임","무선 TWR 교환"],form:"UWB 무선 프레임. 태그가 앵커 3개와 차례로 거리를 잰다.",steps:["안테나 지연은 모듈마다 시작 전 1회 보정","앵커 좌표는 줄자 · 레이저로 실측, 쌍 거리 3개로 검증","시간 분할(TDMA) 없이 각자 재면 충돌한다"],rate:"11~33 Hz (추정)",st:"실측*",note:"*CDK 쌍만 실측: LOS 평균 오차 -0.6~+2.0 cm, 사람 가림 +28.9 cm, 벽 +36.1 cm. EVB 레인징은 전."},
+ {id:"L2",f:"uwb",t:"n6",a:"위치",label:["거리 d1~d3 + 진단값","① 수평거리 환산","② 이상치 제거","③ 3점 위치 (x, y)"],form:"SPI 타임스탬프에서 거리 d_k (k=1~3, m), 수신 진단값(첫 경로 전력 등). IRQ로 알림.",steps:["수평거리 환산: 높이 차 dz를 빼서 √(d²−dz²). dz는 MTF-01 고도를 쓴다 (센서 간 가장 중요한 의존)","이상치 제거: 진단값으로 NLOS 의심 거리를 버리고, 직전 예측과 잔차가 크면 버린다 (게이팅)","3점 최소제곱(가우스-뉴턴), 초기값은 직전 위치. 앵커가 3개라 잔차 검사는 불가","평균 필터는 쓰지 않는다. 3점 평균은 20 Hz에서 50 ms 지연. 평활은 FC EKF에 맡긴다","측정 시각(교환 중간)과 공분산을 붙여 ODOMETRY로 내보낸다"],rate:"11~33 Hz (추정)",st:"추정",note:"앵커 4개로 늘리면 잔차 검사 가능 [제안]. z 소스는 미결정."},
+ {id:"L3",f:"tof",t:"n6",a:"장애물",label:["거리 mm ×5 + status","① status 필터","② 몸체→월드 점","③ 이웃과 중복 제거"],form:"I2C. 센서마다 거리(mm), range_status, 신호율. 같은 주소(0x29) 5개를 TCA9548A로 채널 분리.",steps:["range_status ≠ 0이면 버린다","같은 방향 2회 연속 임계 이내일 때만 장애물 (오경보↓, 1샘플 지연) [제안]","거리 → 점: 방향 단위벡터 × 거리 + 센서 오프셋 → 몸체 좌표 → FC 자세로 월드 좌표","이웃 외삽 위치 근처(게이트)면 이웃으로 연결, 정지 장애물로 따로 세지 않는다"],rate:"최대 50 Hz. 5개 연속 모드 읽기 약 3 ms (계산)",st:"미확인",note:"시작 전 센서마다 오프셋 · FoV(ROI) · 거리 모드 보정. 단발 순차 측정은 250 ms로 느리다. Task 5 전."},
+ {id:"L4",f:"cam",t:"n6",a:"장애물",label:["프레임 1124×1364","LED 중심 → 방위"],form:"MIPI CSI-2, 글로벌 셔터 원시 프레임.",steps:["노출 · 게인 · 화이트밸런스 수동 고정 (LED 색 오인식 방지)","LED 중심 검출 → 왜곡 보정 → 방위 단위벡터 → 노출 중간 시각 자세로 월드 변환","점멸 ID는 4비트 10 Hz면 최소 0.4 s"],rate:"fps 미확인",st:"미확인",note:"후순위. 제어 입력에 아직 쓰지 않는다."},
+ {id:"L5",f:"flow",t:"fc",a:"위치",label:["광류 xy + 품질 + 고도","FC 직결, N6 관여 없음"],form:"UART 115200 MAVLink. 광류 속도(품질 포함), 하향 거리(고도).",steps:["장착 방향(FLOW_ORIENT_YAW)과 위치 오프셋 설정","광류 스케일 계수 보정, 로그의 품질(opt_qua) 확인","EKF 속도 소스 = 광류. 위치 소스 = ExternalNav (UWB)","조도 60 lux 이상, 무늬 없는 바닥은 품질↓"],rate:"최대 100 Hz",st:"확인",note:"실내 고도 진동 사례(±0.6 m)가 있어 고도가 흔들리면 UWB 수평 환산도 흔들린다. 직접 시험 필요."},
+ {id:"L6",f:"n6",t:"fc",a:"제어",label:["ODOMETRY · v_safe · 거리센서","NED 변환, 시각 · 공분산 첨부"],form:"MAVLink2 UART. ODOMETRY 약 245 B (20~30 Hz), SET_POSITION_TARGET_LOCAL_NED 약 65 B (20~50 Hz), DISTANCE_SENSOR 약 30 B × 5 (10~50 Hz).",steps:["방 좌표 → NED: x_ned = y_방, y_ned = x_방, z_ned = −z [제안]","ODOMETRY에 측정 시각과 공분산(품질)을 실어 보낸다","FC의 센서 지연 파라미터를 실제 지연에 맞춘다. 50 ms 어긋나면 1 m/s에서 5 cm"],rate:"20~50 Hz",st:"추정",note:"전송량 약 139 kbaud → UART 460800 baud 이상. yaw 소스 미결정."},
+ {id:"L7",f:"fc",t:"n6",a:"제어",label:["융합 p, v, 자세","EKF 출력"],form:"MAVLink2 UART. UWB 위치 + 광류 속도 + IMU를 EKF가 융합한 상태.",steps:["N6가 받아 ToF 점의 월드 변환과 이웃 방송, CBF 입력에 쓴다","속도 추종 지연 τ가 이 되돌림에 섞인다 (시뮬 가정 0.2~1.0 s)"],rate:"FC 설정",st:"추정",note:"τ 실측이 가장 먼저 할 일. D_eff와 v_max를 정한다."},
+ {id:"L8",f:"fc",t:"motor",a:"제어",label:["모터 출력","속도→자세→각속도"],form:"PWM/DShot. FC 내부 루프(속도 50 Hz, 자세 250 Hz, 각속도 1 kHz: PX4 기준, ArduPilot 값 미확인).",steps:["N6는 이 루프를 건드리지 않는다. 속도 setpoint만 준다"],rate:"1 kHz급",st:"확인",note:"GUIDED 명령이 끊기면 3 s 뒤 정지 (ArduPilot)."},
+ {id:"L9",f:"n6",t:"ble",a:"통신",label:["내 상태 64 B","이벤트 트리거"],form:"id, t_tx, p(12 B), v(12 B), seq. N6 ↔ XIAO는 UART로 가정(미확인).",steps:["예측 위치와 실제 위치 오차가 임계값 δ를 넘을 때만 송신","시뮬 예: 3000 → 61 메시지 (약 98% 감소). 이상적 시뮬 값","패킷 포맷 통일 필요: 31 B × 20 Hz vs 64 B × 50 Hz"],rate:"50 Hz 기준선 → 이벤트 시 감소",st:"추정",note:"N6와 XIAO 연결 방식 미확인."},
+ {id:"L10",f:"ble",t:"n6",a:"통신",label:["이웃 패킷 64 B","seq→시계 보정→외삽→AoI"],form:"수신 프레임 + RSSI. 필드는 id, t_tx, p, v, seq.",steps:["seq로 순서 뒤바뀜 · 손실 검출, 낡은 패킷 폐기","시계 보정 후 외삽: p̂ = p + v · (t_now − t_tx)","AoI = t_now − t_last가 T_stale을 넘으면 stale (진입 · 해제 임계값 분리)","UWB 이웃 거리 d_ij와 ‖p_i − p̂_j‖ 비교로 교차검사 [제안]"],rate:"이웃 수 × 방송 주기",st:"추정",note:"외삽 안 하면 상대속도 2 m/s, 2홉 60~80 ms에서 12~16 cm 어긋난다 (계산)."},
+ {id:"L11",f:"ble",t:"nbr",a:"통신",label:["내 상태 방송","한 홉 손실 0"],form:"BLE 연결. 처리량 최고 109.5 kB/s, 요구치 3.2 kB/s.",steps:["50 Hz × 64 B: 연결 간격 7.5 / 30 / 100 ms 모두 손실 0 (실측)","RTT 64 B: 7.5 ms 간격 평균 26.0 ms, 100 ms 간격 평균 179.8 ms","거리 1 · 5 · 10 m 손실 0, 20 m는 4회 중 1회 28.9% 부족"],rate:"50 Hz × 64 B",st:"실측",note:"측정은 드론 ↔ PC 동글 한 홉이다."},
+ {id:"L12",f:"nbr",t:"ble",a:"통신",label:["이웃 상태","드론↔드론 2홉 미정"],form:"BLE는 별모양(중앙 1 + 주변 다수)이라 드론끼리는 동글을 거치는 2홉이 된다.",steps:["안 가: 동글 중계 (지연 증가, 단일 실패점)","안 나: BLE 광고 방송 (최소 20 ms + 무작위 지연, 시험 안 함)","안 다: UWB 페이로드 (제품 지원 미확인)"],rate:"미정",st:"미확인",note:"현재 BLE 기준. Task 4 Lv3에서 2홉을 시험하고, UWB 페이로드 시험 결과에 따라 UWB 방식으로 바꿀지 판단한다."},
+ {id:"L13",f:"n6",t:"sd",a:"기록",label:["로그 · LED 데이터","링 버퍼 + DMA"],form:"SPI/SDMMC로 로그, GPIO → SN74AHCT125 → WS2812B로 LED ID.",steps:["SD 쓰기는 수십~수백 ms 멈출 수 있어 제어 루프에서 직접 쓰지 않는다","RAM 링 버퍼에 쌓고 낮은 우선순위에서 DMA로 쓴다 [제안]","LED는 5 V 전원 + 디퓨저, 4개 전송 약 0.12 ms"],rate:"비동기",st:"추정",note:"시계는 N6 µs 단조 시계 하나로 통일. FC와는 MAVLink 시간 동기, 기체 간은 동글 비콘 [제안]."}
+];
+
+// 한 주기 순서
+const TL=[
+ {d:"① 내 위치 만들기",h:"UWB 거리 → N6 전처리 → ODOMETRY → FC EKF",u:["앵커 3개와 TWR 교환 → 거리 3개","N6: 수평거리 환산, 이상치 제거, 3점 위치","FC: UWB 위치 + 광류 속도 + IMU 융합 → N6로 회신"],t:["L1","L2","L6","L7"],a:"위치"},
+ {d:"② 이웃 정보 받기",h:"BLE 패킷 → 외삽 + 정보 나이 판정",u:["XIAO가 이웃 패킷 수신 (id, t_tx, p, v, seq)","N6: 순번 검사, 시계 보정, 외삽, AoI 판정"],t:["L12","L10"],a:"통신"},
+ {d:"③ 계산",h:"편대 제어 v_nom → CBF-QP v_safe",u:["ToF 점을 월드 좌표로 바꿔 장애물 제약에 추가","정보가 낡으면 D_eff 확대, 해가 없으면 감속"],t:["L3"],a:"제어"},
+ {d:"④ 내보내기",h:"FC 속도 명령 + 바뀐 만큼만 이웃에 방송",u:["SET_POSITION_TARGET_LOCAL_NED로 v_safe 전달","이벤트 트리거: 변화가 δ를 넘을 때만 BLE 방송","로그는 링 버퍼로"],t:["L6","L9","L11","L13"],a:"제어"}
+];
+
+const nodeOf=id=>NODES.find(n=>n.id===id), edgeOf=id=>E.find(e=>e.id===id);
+
+// 범례
+for(const a in AREAS){
+  const b=document.createElement("button");
+  b.style.setProperty("--c",col(a));
+  b.innerHTML=`<span class="dot"></span>${a}`;
+  b.setAttribute("aria-pressed","false");b.dataset.area=a;
+  b.onclick=()=>{filter=filter===a?null:a;render()};
+  $("legend").append(b);
+}
+
+// 흐름도
+const F=$("flow");
+NODES.forEach(st=>{
+  const nd=document.createElement("button");nd.className="node"+(st.env?" env":"")+(st.core?" core":"");nd.dataset.id=st.id;
+  nd.style.gridRow=st.r;nd.style.gridColumn=st.c;nd.style.setProperty("--c",col(st.a));
+  nd.innerHTML=`<span class="n">${st.n}</span><small>${st.d}</small>`;
+  nd.onclick=()=>{selNode=st.id;render()};
+  F.append(nd);
+});
+const NS="http://www.w3.org/2000/svg";
+const svg=document.createElementNS(NS,"svg");svg.id="edges";
+svg.innerHTML=`<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>`;
+F.append(svg);
+const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+function clip(p0,p1,r){
+  let t0=0,t1=1;const d={x:p1.x-p0.x,y:p1.y-p0.y};
+  for(const [o,dd,lo,hi] of [[p0.x,d.x,r.l,r.r],[p0.y,d.y,r.t,r.b]]){
+    if(Math.abs(dd)<1e-9){if(o<lo||o>hi)return null;continue}
+    let a=(lo-o)/dd,b=(hi-o)/dd;if(a>b)[a,b]=[b,a];t0=Math.max(t0,a);t1=Math.min(t1,b);
+  }
+  return t0>t1?null:[t0,t1];
+}
+function drawEdges(){
+  svg.querySelectorAll(".e,.lb").forEach(e=>e.remove());
+  const fr=F.getBoundingClientRect();
+  svg.setAttribute("width",F.scrollWidth);svg.setAttribute("height",F.scrollHeight);
+  const R={};
+  F.querySelectorAll(".node").forEach(n=>{const b=n.getBoundingClientRect();R[n.dataset.id]={l:b.left-fr.left-2,r:b.right-fr.left+2,t:b.top-fr.top-2,b:b.bottom-fr.top+2}});
+  E.forEach((e,i)=>{
+    const A=R[e.f],B=R[e.t];
+    const rev=E.find(x=>x.f===e.t&&x.t===e.f);
+    const ca={x:(A.l+A.r)/2,y:(A.t+A.b)/2},cb={x:(B.l+B.r)/2,y:(B.t+B.b)/2};
+    const dx=cb.x-ca.x,dy=cb.y-ca.y,L=Math.hypot(dx,dy);
+    const off=rev?30:0, px=-dy/L*off, py=dx/L*off;
+    const p0={x:ca.x+px,y:ca.y+py},p1={x:cb.x+px,y:cb.y+py};
+    const ia=clip(p0,p1,A),ib=clip(p0,p1,B);
+    const ta=ia?ia[1]:0,tb=ib?ib[0]:1;
+    const s0={x:p0.x+(p1.x-p0.x)*ta,y:p0.y+(p1.y-p0.y)*ta},s1={x:p0.x+(p1.x-p0.x)*tb,y:p0.y+(p1.y-p0.y)*tb};
+    const ln=mk("line",{x1:s0.x,y1:s0.y,x2:s1.x,y2:s1.y,class:"e","marker-end":"url(#ah)"});
+    ln.style.setProperty("--c",col(e.a));ln.dataset.id=e.id;svg.append(ln);
+    const lt=rev?(i<E.indexOf(rev)?0.32:0.68):0.5;
+    const g=mk("g",{class:"lb"});g.dataset.id=e.id;g.style.setProperty("--c",col(e.a));
+    const cx=s0.x+(s1.x-s0.x)*lt, cy=s0.y+(s1.y-s0.y)*lt;
+    const side=rev&&Math.abs(dy)>Math.abs(dx);
+    const lx=side?cx+(px<0?-10:10):cx;
+    const t=mk("text",{"text-anchor":side?(px<0?"end":"start"):"middle"});
+    e.label.forEach((s,k)=>{const sp=mk("tspan",{x:lx,y:cy+(k-(e.label.length-1)/2)*14+4});if(k==0)sp.setAttribute("class","h");sp.textContent=s;t.append(sp)});
+    const rc=mk("rect",{rx:4});g.append(rc,t);svg.append(g);
+    const bb=t.getBBox();
+    rc.setAttribute("x",bb.x-5);rc.setAttribute("y",bb.y-2);rc.setAttribute("width",bb.width+10);rc.setAttribute("height",bb.height+4);
+  });
+  applyHi();
+}
+function applyHi(){
+  F.querySelectorAll(".node").forEach(n=>{
+    const st=nodeOf(n.dataset.id);
+    n.classList.toggle("on",n.dataset.id===selNode);
+    n.classList.toggle("fl",!!filter&&st.a!==filter);
+  });
+  svg.querySelectorAll(".e,.lb").forEach(el=>{
+    const e=edgeOf(el.dataset.id);
+    const hit=e.id===selEdge||e.f===selNode||e.t===selNode;
+    el.classList.toggle("hi",hit);el.classList.toggle("lo",!hit||(!!filter&&e.a!==filter));
+  });
+}
+addEventListener("resize",drawEdges);
+document.fonts&&document.fonts.ready.then(drawEdges);
+
+// 표
+E.forEach(e=>{
+  const tr=document.createElement("tr");tr.className="row";tr.tabIndex=0;tr.dataset.id=e.id;tr.style.setProperty("--c",col(e.a));
+  tr.innerHTML=`<td class="code"><span>${e.id}</span></td><td>${nodeOf(e.f).n} → ${nodeOf(e.t).n}</td><td>${e.label[0]}</td><td>${e.label.slice(1).join(" · ")}</td><td>${e.rate}</td><td><span class="st">${e.st}</span></td>`;
+  tr.onclick=()=>{pickEdge(e.id);$("detail").scrollIntoView({behavior:"smooth",block:"center"})};
+  $("tbody").append(tr);
+});
+function pickEdge(id){selEdge=id;selNode=edgeOf(id).t;render()}
+
+// 한 주기 순서
+TL.forEach(s=>{
+  const it=document.createElement("div");it.className="it";it.style.setProperty("--c",col(s.a));
+  it.innerHTML=`<div class="d">${s.d}</div><h3>${s.h}</h3><ul>${s.u.map(x=>`<li>${x}</li>`).join("")}</ul>`;
+  $("tl").append(it);
+});
+
+function renderPanel(){
+  const st=nodeOf(selNode), P=$("panel");
+  P.innerHTML=`<div class="ph"><b>${st.n}</b><span>${st.d}</span></div>`;
+  const G=document.createElement("div");G.className="pg";P.append(G);
+  const list=(title,arr,dirIn)=>{
+    const d=document.createElement("div");d.innerHTML=`<h5>${title}</h5>`;
+    if(!arr.length)d.insertAdjacentHTML("beforeend",`<div class="sub">없음</div>`);
+    arr.forEach(e=>{
+      const b=document.createElement("button");b.className="opt"+(e.id===selEdge?" sel":"")+(filter&&e.a!==filter?" fl":"");
+      b.style.setProperty("--c",col(e.a));
+      b.innerHTML=`<span class="l1">${dirIn?nodeOf(e.f).n+" → ":"→ "+nodeOf(e.t).n+" : "}${e.label[0]}</span><span class="l2">${e.id} · ${e.rate}</span>`;
+      b.onclick=()=>pickEdge(e.id);d.append(b);
+    });
+    G.append(d);
+  };
+  list("받는 데이터",E.filter(e=>e.t===selNode),true);
+  list("보내는 데이터",E.filter(e=>e.f===selNode),false);
+}
+
+function render(){
+  document.querySelectorAll(".legend button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.area===filter)));
+  document.querySelectorAll("#tbody tr").forEach(tr=>{
+    const e=edgeOf(tr.dataset.id);
+    tr.classList.toggle("dim",!!filter&&e.a!==filter);
+    tr.classList.toggle("sel",e.id===selEdge);
+  });
+  renderPanel();
+  const e=edgeOf(selEdge), d=$("detail");
+  d.style.setProperty("--c",col(e.a));
+  d.innerHTML=`<div class="dh"><span class="cd">${e.id}</span><h3>${nodeOf(e.f).n} → ${nodeOf(e.t).n}</h3><span class="pill">${e.a}</span><span class="pill">${e.st}</span></div>
+   <div class="dg">
+     <div><h4>전처리 순서</h4><ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol></div>
+     <div>
+       <div><h4>데이터 형태</h4><p>${e.form}</p></div>
+       <div style="margin-top:14px"><h4>주기</h4><p>${e.rate}</p></div>
+       <div style="margin-top:14px"><h4>비고</h4><p>${e.note}</p></div>
+     </div>
+   </div>`;
+  applyHi();
+}
+render();drawEdges();
+</script>
+</body>
+</html>
