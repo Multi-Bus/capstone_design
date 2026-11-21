@@ -6,3 +6,15 @@
 /회의록/
 /hw-bench/
 .claude/
+
+# 드론 코드: 로그·백업·빌드 산출물은 올리지 않는다 (Releases나 팀 드라이브 사용)
+/logs/
+flash_backup_*.bin
+fclog_*.bin
+blevenv/
+.venv/
+__pycache__/
+*.npz
+tools/logs/
+nucleo/n6_bridge/STM32CubeIDE/**/Debug/
+nucleo/n6_bridge/STM32CubeIDE/**/Release/

@@ -95,6 +95,13 @@ docs/
   진행현황.md    체크리스트
   회의록/        주차별 회의록 PDF
   files/         주문리스트.xlsx, 개선선택지_지도.html
+  호버링_시험_절차.md   호버링 시험 절차 (팀 공유용)
+  핸드오프/      팀 인수인계 문서
+nucleo/          NUCLEO(STM32N657) UART 브리지 소스, release/에 배포 바이너리
+xiao/            XIAO nRF52840 BLE 릴레이 (v1, v2)
+fc/              ArduCopter 파라미터(base, drones/) 와 적용 스크립트(setup/)
+tools/           PC 도구: n6_fly.py(호버링 실행), hover_test/(점검 스크립트)
+VERSIONS.md      기체별로 올라간 버전표
 ```
 
 실측 코드와 원자료는 이 레포에 없고 별도 레포 [drone-hw-bench](https://github.com/Multi-Bus/drone-hw-bench)에 있다.

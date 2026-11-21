@@ -1,0 +1,4 @@
+# n6_fly.py 의존성 (Python 3.10 이상 — Ubuntu 22.04 기본 3.10 OK, Windows 도 동일)
+# 시험한 버전: bleak 3.1.0, pymavlink 2.4.50
+bleak>=0.22
+pymavlink>=2.4.40
