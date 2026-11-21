@@ -75,6 +75,8 @@ flowchart LR
 | | [05 지연 분석](docs/하드웨어/05_지연_분석.md) | 체인별 지연, UART 예산, 측정 계획 |
 | [호버링 시험](docs/호버링_시험_절차.md) | [호버링 시험 절차](docs/호버링_시험_절차.md) | 기체 점검, 광류 · 모터 · 안전 시험, 시험 비행 절차 (팀 공유용). 기체별 버전은 [VERSIONS.md](VERSIONS.md) |
 | [소프트웨어](docs/소프트웨어) | [01 편대 제어와 충돌 회피](docs/소프트웨어/01_편대제어_충돌회피_알고리즘.md) | Consensus, CBF-QP, 비교 알고리즘 |
+| | [충돌회피 · 편대제어 구현계획 v2](docs/소프트웨어/충돌회피_편대제어_구현계획.pdf) | 기여 범위, A* · consensus · 회피 · repair · 이벤트 트리거 층 구조, 진행 단계 |
+| | [swarm](swarm/README.md), [uwb](uwb/README.md) | 트랙 A 알고리즘 baseline 코드, 트랙 B UWB 통신 구현 가능성 확인 코드 |
 | [스토리텔링](docs/스토리텔링) | [01 발표 흐름](docs/스토리텔링/01_발표_흐름.md) | 미팅 보고 A 3축 기준 슬라이드 구성, 예상 질문 |
 | | [02 환경 구성 근거](docs/스토리텔링/02_환경_구성_근거.md) | 물류센터, 15 m 축소, 좌표계 결정 경과 |
 | | [03 부품 선택 이유](docs/스토리텔링/03_부품_선택_이유.md) | 후보 비교, 선택 이유 |
@@ -102,7 +104,18 @@ nucleo/          NUCLEO(STM32N657) UART 브리지 소스, release/에 배포 바
 xiao/            XIAO nRF52840 BLE 릴레이 (v1, v2)
 fc/              ArduCopter 파라미터(base, drones/) 와 적용 스크립트(setup/)
 tools/           PC 도구: n6_fly.py(호버링 실행), hover_test/(점검 스크립트)
+swarm/           트랙 A 파이썬: A*, consensus 편대, CBF-QP · APF 회피, 이벤트 트리거, 2D 시뮬
+tests/           swarm 테스트
+uwb/             트랙 B C99: UWB 패킷 · TDMA · 조정자 배정(include/, src/, test/), airtime 예산(scripts/)
 VERSIONS.md      기체별로 올라간 버전표
+```
+
+```powershell
+python tests/test_swarm.py
+```
+
+```powershell
+python -m swarm.simulator --scenario swap --avoid cbf --comm event --delta 0.1
 ```
 
 실측 코드와 원자료는 이 레포에 없고 별도 레포 [drone-hw-bench](https://github.com/Multi-Bus/drone-hw-bench)에 있다.
