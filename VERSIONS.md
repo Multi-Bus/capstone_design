@@ -10,7 +10,7 @@
 | 1호기 | n6_bridge | 4.7.3, base + `drone1.param` | 미확인 |
 | 2호기 | 미확인 | 미확인 (`drone2.param` 있음) | 미확인 |
 | 3호기 | 미확인 | 미확인 | 미확인 |
-| 4호기 | n6_bridge | 4.7.3, base + `FLOW_ORIENT_YAW 18000` | v1 |
+| 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v1 |
 | 5호기 | 미확인 | 미확인 | 미확인 |
 | 6호기 | 미확인 | 미확인 (`drone6_asis_20261120.param` 있음) | 미확인 |
 
@@ -28,7 +28,7 @@
 | 기체 | 펌웨어 | 기준 파일 | 기체별 변경 | 확인일 |
 | --- | --- | --- | --- | --- |
 | 1호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone1.param`, `FLOW_ORIENT_YAW 18000` | 2026-11-21 |
-| 4호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `FLOW_ORIENT_YAW 0 → 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-21 |
+| 4호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone4.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`, `EK3_SRC1_POSZ 2` (거리센서) | 2026-11-21 |
 
 ### XIAO BLE 릴레이 (`xiao/`)
 
