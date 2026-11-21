@@ -1,0 +1,86 @@
+# N6 드론 공통 기본 파라미터 (ArduCopter 4.7.x, DAKEFPV H743, 3인치 덕트 4S)
+# 형식: NAME,VALUE   ('#' 뒤는 주석. Mission Planner 형식과 호환)
+# apply_params.py 가 1단계(FRAME_*) -> 재부팅 -> 2단계(나머지) -> 재부팅 순서로 적용한다.
+#
+# 버전에 따라 이름이 다른 항목은 "새 이름"으로 적는다. 펌웨어에 없으면 스크립트가 옛 이름으로 바꿔 넣는다:
+#   MAV_GCS_SYSID          -> SYSID_MYGCS
+#   ARMING_SKIPCHK (OR)    -> ARMING_CHECK 에서 같은 비트 끄기
+#   RNGFND1_MIN/MAX (m)    -> RNGFND1_MIN_CM/MAX_CM (cm, x100)
+#   RNGFND1_GNDCLR (m)     -> RNGFND1_GNDCLEAR (cm, x100)
+#   MAV2_OPTIONS (OR)      -> SERIAL1_OPTIONS 에 1024 OR (MAVn_ 파라미터가 없는 옛 펌웨어에서만)
+#
+# 기체마다 다른 값은 여기 넣지 말고 명령줄 --set 으로 넘긴다:
+#   SERVO_BLH_RVMASK (모터 방향, 모터 테스트 결과)
+# MOT_SPIN_ARM / MOT_SPIN_MIN 은 스크립트가 변경을 거부한다 (모터 테스트로 따로 정함).
+
+# 프레임 (1단계)
+FRAME_CLASS,1          # Quad
+FRAME_TYPE,12          # BetaFlightX
+
+# FC 장착 방향: 보드가 앞뒤로 뒤집혀 장착됨 (화살표가 기체 뒤쪽). 측정으로 확인 (drone1, 2026-11-19)
+# 이 값이 바뀌면 QGC에서 가속도계 6방향 + 수평 보정을 다시 해야 함 (보정 창 Autopilot Orientation = Pitch180)
+AHRS_ORIENTATION,12    # PITCH_180
+
+# ESC
+MOT_PWM_TYPE,5         # DShot300
+
+# MTF-01P (GPS 포트 = SERIAL1)
+SERIAL1_PROTOCOL,1     # MAVLink1
+SERIAL1_BAUD,115
+MAV2_OPTIONS,2         # 비트1: 이 링크로 MAVLink 포워딩 안 함 (기존 값에 OR)
+FLOW_TYPE,5            # MAVLink
+# FLOW_ORIENT_YAW (광류 센서 장착 방향, centi-deg) 는 기체별로 확인해서 drones/drone<N>.param 에 (drone1 = 18000)
+RNGFND1_TYPE,10        # MAVLink
+RNGFND1_ORIENT,25      # 아래 방향
+RNGFND1_MIN,0.01       # m
+RNGFND1_MAX,8          # m
+RNGFND1_GNDCLR,0.05    # m, 바닥에 놓였을 때 거리값 (실측 0.02; EKF 하한이 0.05)
+
+# NUCLEO (HD VTX 포트 = SERIAL4)
+SERIAL4_PROTOCOL,2     # MAVLink2
+SERIAL4_BAUD,921
+OSD_TYPE2,0
+
+# EKF (광류)
+EK3_SRC1_POSXY,0
+EK3_SRC1_VELXY,5       # OpticalFlow
+EK3_SRC1_POSZ,1        # Baro
+EK3_SRC1_VELZ,0
+EK3_SRC_OPTIONS,0
+EK3_RNG_USE_HGT,70     # 거리센서 최대(8 m)의 70% 아래에서 높이를 거리센서로 (약 3.9 m 아래 켜짐, 5.6 m 위 꺼짐)
+# ^ drone1 저고도 비행 시험 중 (2026-11-20). EK3_SRC1_POSZ=2 로 바꿀 수도 있음
+
+# 나침반 (보드에 없음)
+COMPASS_ENABLE,0
+
+# 링크 끊김 -> 착륙
+MAV_GCS_SYSID,250
+FS_GCS_ENABLE,5        # Land
+FS_GCS_TIMEOUT,3
+FS_OPTIONS,0
+
+# RC 없이 비행
+FS_THR_ENABLE,0
+ARMING_SKIPCHK,64      # 비트6 = RC Channels 검사 건너뛰기 (기존 값에 OR)
+
+# 배터리
+BATT_MONITOR,4
+BATT_VOLT_PIN,11
+BATT_CURR_PIN,10
+BATT_VOLT_MULT,16.0
+BATT_AMP_PERVLT,83.3   # 이미 같으면 쓰지 않음
+BATT_LOW_VOLT,14.0
+BATT_FS_LOW_ACT,1      # Land
+
+# 초기 튜닝 (3인치 덕트, 4S)
+MOT_BAT_VOLT_MAX,16.8
+MOT_BAT_VOLT_MIN,13.2
+MOT_THST_HOVER,0.25
+INS_ACCEL_FILTER,10
+INS_GYRO_FILTER,80
+ATC_RAT_RLL_FLTD,40
+ATC_RAT_RLL_FLTT,40
+ATC_RAT_PIT_FLTD,40
+ATC_RAT_PIT_FLTT,40
+ATC_RAT_YAW_FLTT,40
+ATC_RAT_YAW_FLTE,2
