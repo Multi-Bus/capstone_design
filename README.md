@@ -1,8 +1,6 @@
 <div align="center">
 
-# 멀티버스
-
-**GPS 없는 실내에서 드론 6대가 서로 부딪히지 않고 움직이게 하는, 가벼운 제어 시스템.**
+# 다수 드론 충돌 회피 및 편대 유지 경량 제어
 
 ![status](https://img.shields.io/badge/status-hardware%20bring--up-orange)
 ![UWB](https://img.shields.io/badge/UWB-DWM3000-blue)
