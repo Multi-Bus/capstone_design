@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>멀티버스 편대 제어</title>
+  <link rel="preload" href="vendor/fonts/Pretendard-SemiBold.subset.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <header id="title">
+    <p class="brand">MULTIVERSE</p>
+    <h1 id="formation">대기</h1>
+    <p id="summary">서버 연결 중</p>
+  </header>
+
+  <div id="status" class="pill">
+    <span id="link" class="dot"></span>
+    <span id="link-text">연결 중</span>
+    <span class="rule"></span>
+    <span>가상 모드</span>
+  </div>
+
+  <aside id="fleet" aria-label="기체 상태">
+    <p class="panel-title">기체</p>
+    <ol id="fleet-list"></ol>
+  </aside>
+
+  <nav id="dock" aria-label="편대 명령">
+    <div class="group" role="group" aria-label="편대 형태">
+      <button data-formation="line" title="일렬 (1)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,96a32,32,0,1,0,32,32A32,32,0,0,0,128,96Zm0,48a16,16,0,1,1,16-16A16,16,0,0,1,128,144ZM48,96a32,32,0,1,0,32,32A32,32,0,0,0,48,96Zm0,48a16,16,0,1,1,16-16A16,16,0,0,1,48,144ZM208,96a32,32,0,1,0,32,32A32,32,0,0,0,208,96Zm0,48a16,16,0,1,1,16-16A16,16,0,0,1,208,144Z"/></svg>
+        일렬
+      </button>
+      <button data-formation="triangle" title="삼각 (2)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M236.8,188.09,149.35,36.22a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.34,24.34,0,0,0,40.55,224h174.9a24.34,24.34,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8Z"/></svg>
+        삼각
+      </button>
+      <button data-formation="circle" title="원 (3)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Z"/></svg>
+        원
+      </button>
+    </div>
+    <span class="divider"></span>
+    <div class="group" role="group" aria-label="비행 명령">
+      <button data-cmd="start" class="primary" title="시작 (S)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>
+        시작
+      </button>
+      <button data-cmd="stop" title="중지: 그 자리 착륙 (X)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></svg>
+        중지
+      </button>
+      <button data-cmd="home" title="복귀 (H)">
+        <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M240,208H224V136l2.34,2.34A8,8,0,0,0,237.66,127L139.31,28.68a16,16,0,0,0-22.62,0L18.34,127a8,8,0,0,0,11.32,11.31L32,136v72H16a8,8,0,0,0,0,16H240a8,8,0,0,0,0-16ZM48,120l80-80,80,80v88H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48Zm96,88H112V160h32Z"/></svg>
+        복귀
+      </button>
+    </div>
+  </nav>
+
+  <nav id="tools" aria-label="경로 지도">
+    <button data-tool="goal" title="목표 지정: 바닥을 클릭 (G)">
+      <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,191.63V184a8,8,0,0,0-16,0v31.63A88.13,88.13,0,0,1,40.37,136H72a8,8,0,0,0,0-16H40.37A88.13,88.13,0,0,1,120,40.37V72a8,8,0,0,0,16,0V40.37A88.13,88.13,0,0,1,215.63,120H184a8,8,0,0,0,0,16h31.63A88.13,88.13,0,0,1,136,215.63Z"/></svg>
+      목표 지정
+    </button>
+    <button data-tool="obstacle" title="장애물 배치: 바닥을 클릭 (O)">
+      <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,16C87.63,16,56,35.33,56,60V196c0,24.67,31.63,44,72,44s72-19.33,72-44V60C200,35.33,168.37,16,128,16Zm0,16c26.49,0,56,11.5,56,28s-29.51,28-56,28S72,76.5,72,60,101.51,32,128,32Zm0,192c-29.83,0-56-13.08-56-28V88c13.1,9.85,33.14,16,56,16s42.9-6.2,56-16V196C184,210.92,157.83,224,128,224Z"/></svg>
+      장애물 배치
+    </button>
+    <button data-cmd="clear_obstacles" title="놓은 장애물 지우기 (C)">
+      <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M225,80.4,183.6,39a24,24,0,0,0-33.94,0L31,157.66a24,24,0,0,0,0,33.94l30.06,30.06A8,8,0,0,0,66.74,224H216a8,8,0,0,0,0-16h-84.7L225,114.34A24,24,0,0,0,225,80.4ZM108.68,208H70.05L42.33,180.28a8,8,0,0,1,0-11.31L96,115.31,148.69,168Zm105-105L160,156.69,107.31,104,161,50.34a8,8,0,0,1,11.32,0l41.38,41.38a8,8,0,0,1,0,11.31Z"/></svg>
+      장애물 지우기
+    </button>
+  </nav>
+
+  <div id="toast" role="status" hidden></div>
+
+  <div id="lost" role="alert" hidden>
+    <p class="lost-title">서버 연결 끊김</p>
+    <p>1초마다 다시 연결합니다</p>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

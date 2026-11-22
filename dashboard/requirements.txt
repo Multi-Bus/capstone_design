@@ -1,0 +1,8 @@
+# 대시보드 서버 의존성: pip install -r dashboard/requirements.txt
+numpy
+fastapi
+uvicorn
+websockets  # uvicorn의 WebSocket 지원
+# 테스트 전용 (fastapi.testclient)
+httpx
+pytest
