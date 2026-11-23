@@ -7,6 +7,7 @@
 | `scripts/airtime_budget.py` | 20 ms 프레임 airtime 예산 (F2). DS-TWR 실측값을 `--twr-us`로 넣는다 | 근사식 |
 | `include/uwb_protocol.h`, `src/uwb_protocol.c` | 패킷 직렬화, TDMA 슬롯 배치, 조정자 배정, 거리 일관성 검사, 40비트 시계 오프셋. 순수 C99 | PC 테스트 통과, Cortex-M55 컴파일 확인 |
 | `test/test_uwb_protocol.c` | 위 모듈 점검 | |
+| `anchor_dwm3001_3to1/` | DWM3001CDK 앵커 펌웨어 (3대1 DS-TWR, 플래시 단독 동작). 설명은 그 폴더 `README_KO.md` | A1·A2 올림, 태그와 실측 전 |
 | `firmware/` (예정) | N6 CubeIDE 프로젝트: Qorvo DW3000 드라이버 포팅, SPI + IRQ, DS-TWR | U0. 드라이버는 Qorvo에서 받아야 한다 |
 
 ```powershell
