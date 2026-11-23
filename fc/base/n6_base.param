@@ -44,11 +44,10 @@ OSD_TYPE2,0
 # EKF (광류)
 EK3_SRC1_POSXY,0
 EK3_SRC1_VELXY,5       # OpticalFlow
-EK3_SRC1_POSZ,1        # Baro
+EK3_SRC1_POSZ,2        # RangeFinder. 덕트 안 프롭 바람에 기압계가 +1~2 m 틀어져서 1(Baro)에서 변경 (drone4 호버 시험으로 확인, 2026-11-23)
 EK3_SRC1_VELZ,0
 EK3_SRC_OPTIONS,0
 EK3_RNG_USE_HGT,70     # 거리센서 최대(8 m)의 70% 아래에서 높이를 거리센서로 (약 3.9 m 아래 켜짐, 5.6 m 위 꺼짐)
-# ^ drone1 저고도 비행 시험 중 (2026-11-20). EK3_SRC1_POSZ=2 로 바꿀 수도 있음
 
 # 나침반 (보드에 없음)
 COMPASS_ENABLE,0

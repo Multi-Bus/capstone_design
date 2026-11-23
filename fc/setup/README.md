@@ -250,7 +250,7 @@ cp drones/droneN.param.example drones/drone3.param
 | MTF-01P | `SERIAL1_PROTOCOL=1`, `SERIAL1_BAUD=115`, `MAV2_OPTIONS=2`, `FLOW_TYPE=5`, `RNGFND1_TYPE=10`, `RNGFND1_ORIENT=25`, `RNGFND1_MIN=0.01`, `RNGFND1_MAX=8` | GPS 포트로 MAVLink 수신. `MAV2_OPTIONS=2`는 센서 메시지를 다른 링크로 퍼뜨리지 않게 합니다. 거리센서는 아래 방향, 0.01~8 m. |
 | 착지 높이 | `RNGFND1_GNDCLR=0.05` | 바닥에 놓였을 때 거리값 (실측 0.02 m, EKF가 0.05 m 아래는 0.05로 씀) |
 | NUCLEO | `SERIAL4_PROTOCOL=2`, `SERIAL4_BAUD=921`, `OSD_TYPE2=0` | HD VTX 포트를 노트북 BLE 링크(MAVLink2, 921600)로. 그 포트의 OSD 기능은 끔. |
-| EKF (광류) | `EK3_SRC1_POSXY=0`, `EK3_SRC1_VELXY=5`, `EK3_SRC1_POSZ=1`, `EK3_SRC1_VELZ=0`, `EK3_SRC_OPTIONS=0` | GPS 없이 광류로 수평 속도, 기압계로 높이 |
+| EKF (광류) | `EK3_SRC1_POSXY=0`, `EK3_SRC1_VELXY=5`, `EK3_SRC1_POSZ=2`, `EK3_SRC1_VELZ=0`, `EK3_SRC_OPTIONS=0` | GPS 없이 광류로 수평 속도, 거리센서로 높이 |
 | EKF 높이 | `EK3_RNG_USE_HGT=70` | 낮게(약 3.9 m 아래) 천천히 날 때는 높이를 거리센서로 잡음. **시험 중, 바뀔 수 있음** (아래 5절) |
 | 나침반 | `COMPASS_ENABLE=0` | 보드에 나침반 없음 |
 | 링크 끊김 | `MAV_GCS_SYSID=250`, `FS_GCS_ENABLE=5`, `FS_GCS_TIMEOUT=3`, `FS_OPTIONS=0` | 노트북 프로그램(시스템 ID 250)의 신호가 3초 끊기면 자동 착륙 |
@@ -266,7 +266,7 @@ cp drones/droneN.param.example drones/drone3.param
 
 ## 5. 아직 정해지지 않은 것
 
-- **EKF 높이 설정**: drone1 저고도 비행 시험 중입니다. 이륙할 때 EKF 높이가 실제보다 크게 올라가는 현상이 있었고, `EK3_SRC1_POSZ=2`(높이를 항상 거리센서로)로 바꾸는 안을 검토하고 있습니다. 정해지면 새 `n6_base.param`을 받아서 `apply_params.py --drone <N>`을 다시 돌리세요.
+- **EKF 높이 설정**: 이륙할 때 프롭 바람에 기압계가 틀어져 EKF 높이가 실제보다 크게 올라가는 현상이 있었습니다. 2026-11-23부터 `n6_base.param`의 `EK3_SRC1_POSZ`는 2(높이를 항상 거리센서로)입니다. 4호기 저고도 호버 시험에서 확인했습니다. 이전 값(1)으로 설정한 기체는 `apply_params.py --drone <N>`을 다시 돌리세요.
 - **`MOT_SPIN_ARM` / `MOT_SPIN_MIN`**: 담당자가 모터 테스트로 정합니다.
 - **튜닝 값**: 지금은 초기값입니다. 비행하면서 바뀝니다.
 

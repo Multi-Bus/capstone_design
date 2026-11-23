@@ -28,7 +28,11 @@
 | 기체 | 펌웨어 | 기준 파일 | 기체별 변경 | 확인일 |
 | --- | --- | --- | --- | --- |
 | 1호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone1.param`, `FLOW_ORIENT_YAW 18000` | 2026-11-21 |
-| 4호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone4.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`, `EK3_SRC1_POSZ 2` (거리센서) | 2026-11-21 |
+| 3호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone3.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-23 |
+| 4호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone4.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-23 |
+| 5호기 | ArduCopter 4.7.3 | `fc/base/n6_base.param` | `fc/drones/drone5.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-23 |
+
+`EK3_SRC1_POSZ 2`(거리센서 높이)는 2026-11-23부터 `n6_base.param` 공통값이다. 4호기 호버 시험에서 확인했다.
 
 ### XIAO BLE 릴레이 (`xiao/`)
 
