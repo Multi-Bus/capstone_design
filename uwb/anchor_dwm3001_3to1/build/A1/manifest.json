@@ -1,0 +1,12 @@
+{
+  "anchor_id": 1,
+  "firmware": "anchor3to1-v1",
+  "slot_us": 20000,
+  "antenna_delay_dtu": 16385,
+  "tx_power_index": 27,
+  "channel": 5,
+  "hex": "anchor_A1.hex",
+  "hex_sha256": "c02cd104b2fce2e60ee8397d50b562d9011558d2f0dd592830ff0854f5dfbbb9",
+  "built": "2026-11-23 20:01:12",
+  "gcc": "/opt/st/stm32cubeide_2.2.0/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.linux64_1.0.100.202602081740/tools/bin/arm-none-eabi-gcc"
+}

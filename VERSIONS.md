@@ -46,6 +46,7 @@
 
 - `nucleo/`, `xiao/n6_ble_relay_v2/`, `fc/base`, `fc/drones/drone1.param`, `fc/setup/`, `tools/n6_fly.py`, `tools/dev/`, `docs/핸드오프/`: 팀 Dropbox 핸드오프 `n6_drone_handoff_20261120.zip`에서 가져왔다.
 - `xiao/n6_ble_relay_v1/`, `fc/drones/drone2.param`, `fc/drones/drone6_asis_20261120.param`: 이 저장소에 원래 있던 파일이다.
+- `uwb/anchor_dwm3001_3to1/`: 팀 Dropbox `3001앵커_펌웨어_3to1_20261123.zip`에서 가져왔다. `backups/`(A1·A2 원래 플래시)와 `.elf`, `.map`은 빼고, 보드에 올린 `.hex`, `.bin`, `manifest.json`은 넣었다. `backups/`는 Dropbox zip에 있다.
 - `tools/hover_test/`: 이번 호버링 시험 중에 작성한 점검 스크립트다. Dropbox 자료가 아니다.
 
 시험 절차와 결과는 `docs/호버링_시험_절차.md`에 있다.
