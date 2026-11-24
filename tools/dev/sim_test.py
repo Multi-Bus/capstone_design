@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import importlib.util
+import math
 import random
 import sys
 import time
@@ -41,6 +42,9 @@ class FakeFC:
         self.armed = False
         self.z = 0.0
         self.target = None
+        self.yaw = 40.0        # 도
+        self.yaw_goal = None
+        self.yaw_rate = 0.0
         self.land_t = None
         self.gcs_last = 0.0
         self.gcs_seen = False
@@ -87,7 +91,7 @@ class FakeFC:
         if t == "REQUEST_DATA_STREAM":
             self.log.append((now, "RDS", (msg.req_stream_id, msg.req_message_rate, msg.start_stop)))
             self.streams_on = False
-            for k in (32, 1, 132):  # ArduPilot: 스트림 바꾸면 그 스트림 메시지 간격 덮어씀
+            for k in (32, 1, 132, 30):  # ArduPilot: 스트림 바꾸면 그 스트림 메시지 간격 덮어씀
                 self.intervals[k] = 0
             return
         if t == "SET_GPS_GLOBAL_ORIGIN":
@@ -131,6 +135,14 @@ class FakeFC:
                     self.ack(c, 0)
                 else:
                     self.ack(c, 4)
+        elif c == m.MAV_CMD_CONDITION_YAW:
+            if self.armed and self.mode == 4 and self.z < -0.05:
+                d = p[0] if p[2] >= 0 else -p[0]
+                self.yaw_goal = (self.yaw + d) % 360.0 if p[3] else p[0]
+                self.yaw_rate = p[1]
+                self.ack(c, 0)
+            else:
+                self.ack(c, 4)
         elif c == m.MAV_CMD_NAV_TAKEOFF:
             if self.armed and self.mode == 4 and self.z >= -0.01:
                 self.target = p[6]
@@ -158,6 +170,13 @@ class FakeFC:
                         self.armed = False
                         self.land_t = None
                         self.out(self.tx.statustext_encode(6, b"Land complete, disarming"))
+            if self.yaw_goal is not None:
+                err = (self.yaw_goal - self.yaw + 180.0) % 360.0 - 180.0
+                stepv = self.yaw_rate * dt
+                if abs(err) <= stepv:
+                    self.yaw, self.yaw_goal = self.yaw_goal, None
+                else:
+                    self.yaw = (self.yaw + math.copysign(stepv, err)) % 360.0
             # GCS 페일세이프
             if self.gcs_seen and self.armed and self.mode != 9 and now - self.gcs_last > 3.0:
                 self.mode = 9
@@ -173,6 +192,12 @@ class FakeFC:
                 t_att = now
                 self.out(self.tx.attitude_encode(0, 0, 0, 0, 0, 0, 0))
             iv = self.intervals
+            if iv.get(30, 0) > 0 and now - t_att >= iv[30] / 1e6:
+                t_att = now
+                yaw = math.radians(self.yaw + random.gauss(0, 0.5))
+                self.out(self.tx.attitude_encode(0, math.radians(random.gauss(0, 0.3)),
+                                                 math.radians(random.gauss(1.0, 0.3)),
+                                                 (yaw + math.pi) % (2 * math.pi) - math.pi, 0, 0, 0))
             if iv.get(32, 0) > 0 and now - t_lpn >= iv[32] / 1e6:
                 t_lpn = now
                 dip = self.baro_dip if (self.armed and self.z > -0.05) else 0.0   # 바닥에서 모터 바람 -> EKF 높이 떨어짐
@@ -288,9 +313,11 @@ async def s1_normal():
         # 설정 순서: 스트림 정지가 SET_MESSAGE_INTERVAL 보다 먼저
         rds_t = min(t for (t, k, d) in fc.log if k == "RDS")
         smi = [(t, d) for (t, d) in fc.cmds() if d[0] == m.MAV_CMD_SET_MESSAGE_INTERVAL]
-        check("s1 스트림 정지 → 간격 설정 순서", all(t > rds_t for t, _ in smi) and len(smi) == 3)
+        check("s1 스트림 정지 → 간격 설정 순서", all(t > rds_t for t, _ in smi) and len(smi) == 4)
         check("s1 메시지 간격 값", fc.intervals.get(32) == 200000 and fc.intervals.get(132) == 200000
-              and fc.intervals.get(1) == 1000000, str(fc.intervals))
+              and fc.intervals.get(1) == 1000000 and fc.intervals.get(30) == 100000, str(fc.intervals))
+        check("s1 상태줄 자세 표시", "피치 +1." in sc.app._status_text(),
+              sc.app._status_text())
         rds = [d for (t, k, d) in fc.log if k == "RDS"][0]
         check("s1 REQUEST_DATA_STREAM(ALL,0,stop)", rds == (0, 0, 0), str(rds))
         # 하트비트 5 Hz
@@ -665,11 +692,49 @@ async def s14_baro_dip_at_arm():
         check("s14 시험 완료", "시험 완료" in sc.text() and not fc.armed)
 
 
+async def s15_yaw():
+    """--yaw 90: 호버 뒤 90° 씩 4번 회전, 회전마다 통계, CSV 기록, 한 바퀴 돌아 원래 방위각."""
+    (OUT / "s15_yaw_att.csv").unlink(missing_ok=True)
+    async with Scenario("s15_yaw", yaw=90.0, yaw_hold=0.6, hover=0.3) as sc:
+        fc = sc.fc
+        start = time.monotonic()
+        yaw0 = fc.yaw
+        await sc.key("t")
+        await sc.key("y")
+        await sc.wait(lambda: sc.app._test_task is not None and sc.app._test_task.done(), 60)
+        yc = [p for (_, (c, p)) in fc.cmds(start) if c == m.MAV_CMD_CONDITION_YAW]
+        check("s15 CONDITION_YAW 4번 (90°, 30°/s, 시계, 상대)",
+              len(yc) == 4 and all(p[:4] == (90.0, 30.0, 1.0, 1.0) for p in yc), str(yc))
+        txt = sc.text()
+        check("s15 회전마다 통계 4줄", sum(f"회전 {k}/4: 목표" in txt for k in range(1, 5)) == 4
+              and txt.count("요 오차") == 4)
+        check("s15 회전마다 도달", txt.count("만에 도달") == 4)
+        check("s15 한 바퀴 뒤 원래 방위각", abs(((fc.yaw - yaw0) + 180) % 360 - 180) < 1.0, f"{fc.yaw:.1f}")
+        check("s15 LAND 는 회전 뒤", fc.modes_sent(start)[-1] == 9 and "시험 완료" in txt)
+        csv = OUT / "s15_yaw_att.csv"
+        rows = csv.read_text(encoding="utf-8").splitlines()
+        check("s15 자세 CSV (머리줄 + 회전 중 목표 방위각)", rows[0].startswith("time,phase,target_yaw_deg")
+              and any(",회전2/4," in r for r in rows), f"{len(rows)} 줄")
+
+
+async def s16_hold():
+    """--hold: 시간 제한 없이 호버, 스페이스(킬)로만 LAND."""
+    async with Scenario("s16_hold", alt=1.3, hover=float("inf")) as sc:
+        t = await _to_hover(sc)
+        await asyncio.sleep(4.0)
+        check("s16 4초 지나도 호버 유지, LAND 안 보냄", sc.app._phase == "호버" and sc.fc.modes_sent(t) == []
+              and abs(sc.fc.z + 1.3) < 0.01, f"{sc.app._phase} z={sc.fc.z:.2f}")
+        check("s16 안내 문구", "착륙 명령(스페이스)까지" in sc.text())
+        await sc.key(" ", 0.6)
+        check("s16 스페이스 → LAND 3회", sc.fc.modes_sent(t) == [9, 9, 9], str(sc.fc.modes_sent(t)))
+        await sc.wait(lambda: not sc.fc.armed, 10)
+
+
 async def main():
     random.seed(1)
     only = sys.argv[1:]
     for fn in (s11_blelink_disconnect, s10_ble_fragment_lock, s1_normal, s2_kill, s3_mode_change, s4_short_drop, s4b_long_drop,
-               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm):
+               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm, s15_yaw, s16_hold):
         if only and fn.__name__ not in only:
             continue
         try:
