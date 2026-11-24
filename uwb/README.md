@@ -10,6 +10,8 @@
 | `anchor_dwm3001_3to1/` | DWM3001CDK 앵커 펌웨어 (3대1 DS-TWR, 플래시 단독 동작). 설명은 그 폴더 `README_KO.md` | 3대 올림, 1호기 태그와 실측 (2026-11-23) |
 | `results/2026-11-23_3to1_trilateration/` | 앵커 3대 + 1호기 태그 삼변측량 결과, 측정 CSV, 재계산 스크립트 | 바닥 높이 수평 오차 4.5~7.9 cm (보정 전) |
 | `results/2026-11-24_3to1_laser_check/` | 다른 배치에서 태그–앵커 거리를 레이저 거리와 비교 (앵커 이름 = 펌웨어 ID) | 반복성 0.5 cm, A3 +2 cm, A1 −7 cm, A2 −13~−21 cm |
+| `results/2026-11-24_3to1_A2_calibration/` | A2 거리 보정 전후 비교 (레이저 기준, 두 지점) | A2 −12~−14 cm → 0~+0.2 cm |
+| `results/2026-11-24_3to1_A1_calibration/` | A1 보정 후 지점 2 확인, 지점 3에서 태그 높이 12 cm 차이 비교 | 지점 2 세 앵커 1 cm 이내, 지점 3 −6.5~+2.4 cm |
 | `firmware/` (예정) | N6 CubeIDE 프로젝트: Qorvo DW3000 드라이버 포팅, SPI + IRQ, DS-TWR | U0. 드라이버는 Qorvo에서 받아야 한다 |
 
 ```powershell
