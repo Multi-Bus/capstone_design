@@ -106,10 +106,12 @@ docs/
   호버링_시험_절차.md   호버링 시험 절차 (팀 공유용)
   핸드오프/      팀 인수인계 문서
 nucleo/          NUCLEO(STM32N657) UART 브리지 소스, release/에 배포 바이너리
+                 n6_algo_bench/: swarm/c 알고리즘 시간 측정 펌웨어 (Task 3 Lv3)
 xiao/            XIAO nRF52840 BLE 릴레이 (v1, v2)
 fc/              ArduCopter 파라미터(base, drones/) 와 적용 스크립트(setup/)
 tools/           PC 도구: n6_fly.py(호버링 실행), hover_test/(점검 스크립트)
 swarm/           트랙 A 파이썬: A*, consensus 편대, CBF-QP · APF 회피, 이벤트 트리거, 2D 시뮬
+                 c/: 같은 알고리즘의 C99 포팅 (N6용)
 tests/           swarm, dashboard 테스트
 uwb/             트랙 B C99: UWB 패킷 · TDMA · 조정자 배정(include/, src/, test/), airtime 예산(scripts/)
 dashboard/       발표용 편대 리모트 대시보드(가상 모드): FastAPI 서버 + three.js 화면
