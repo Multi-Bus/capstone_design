@@ -15,13 +15,14 @@ blevenv/
 .venv/
 __pycache__/
 *.npz
-tools/logs/
-nucleo/n6_bridge/STM32CubeIDE/**/Debug/
-nucleo/n6_bridge/STM32CubeIDE/**/Release/
-nucleo/n6_algo_bench/STM32CubeIDE/**/Debug/
-nucleo/n6_algo_bench/STM32CubeIDE/**/Release/
+gcs/tools/logs/
+firmware/nucleo/n6_bridge/STM32CubeIDE/**/Debug/
+firmware/nucleo/n6_bridge/STM32CubeIDE/**/Release/
+firmware/nucleo/n6_algo_bench/STM32CubeIDE/**/Debug/
+firmware/nucleo/n6_algo_bench/STM32CubeIDE/**/Release/
 
 # C 테스트 빌드 산출물
-uwb/test/test_uwb_protocol
+firmware/uwb/protocol/test/test_uwb_protocol
 *.exe
 *.o
+gcs/tools/dev/sim_out/
