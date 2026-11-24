@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from dashboard.server import app  # noqa: E402
-from dashboard.server import formations  # noqa: E402
-from dashboard.server import sim  # noqa: E402
+from gcs.dashboard.server import app  # noqa: E402
+from gcs.dashboard.server import formations  # noqa: E402
+from gcs.dashboard.server import sim  # noqa: E402
 
 
 def test_slots_shapes():
@@ -152,7 +152,7 @@ def test_ws_state_two_clients_and_reconnect():
 
 
 def test_web_offline_and_vendored():
-    web = Path(__file__).resolve().parents[1] / "dashboard" / "web"
+    web = Path(__file__).resolve().parents[1] / "gcs" / "dashboard" / "web"
     for f in ["index.html", "main.js", "style.css", "vendor/three.module.js",
               "vendor/addons/controls/OrbitControls.js", "vendor/addons/renderers/CSS2DRenderer.js"]:
         assert (web / f).is_file(), f

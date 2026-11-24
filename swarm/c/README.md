@@ -44,9 +44,9 @@ python tests/test_swarm_c.py
 
 ## N6에서 시간 재기
 
-`nucleo/n6_algo_bench/`가 이 라이브러리를 링크해서 NUCLEO-N657 보드에서 시간을 잰다. FSBL RAM이 256 KB라서 A* 작업 공간을 `SWARM_USE_AXISRAM1`로 AXISRAM1에 둔다(`SWARM_BIG`).
+`firmware/nucleo/n6_algo_bench/`가 이 라이브러리를 링크해서 NUCLEO-N657 보드에서 시간을 잰다. FSBL RAM이 256 KB라서 A* 작업 공간을 `SWARM_USE_AXISRAM1`로 AXISRAM1에 둔다(`SWARM_BIG`).
 
 ## 아직 안 한 것
 
 - `n6_algo_bench`를 보드에서 실제로 돌려 시간을 재는 일.
-- 기체 코드(`nucleo/n6_bridge`)와의 연결. 지금 브리지는 BLE와 FC 사이를 잇기만 한다.
+- 기체 코드(`firmware/nucleo/n6_bridge`)와의 연결. 지금 브리지는 BLE와 FC 사이를 잇기만 한다.
