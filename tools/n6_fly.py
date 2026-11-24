@@ -22,6 +22,12 @@ n6_fly.py — N6 드론: 노트북에서 BLE 로 0.8 m 이륙 -> 5 s 호버 -> �
   python n6_fly.py                       # N6-DRONE-1 에 연결
   python n6_fly.py --no-arm              # 연결/텔레메트리만 (이륙 키 막힘)
   python n6_fly.py --name N6-DRONE-2 --alt 0.8 --hover 5
+  python n6_fly.py --alt 1.3 --hold      # 1.3 m 로 떠서 스페이스(LAND) 누를 때까지 유지
+  python n6_fly.py --yaw 90              # 호버 뒤 제자리에서 90° 씩 4번 돌기 (방위각/자세 측정)
+
+방위각/자세 기록
+  ATTITUDE (롤, 피치, 요) 를 10 Hz 로 받아 로그 옆 *_att.csv 에 모두 적는다 (--no-arm 이어도).
+  --yaw 를 주면 회전마다 목표 방위각 대비 오차와, 멈춰 있는 동안 요·피치·롤의 평균과 흔들림(표준편차)을 찍는다.
 """
 from __future__ import annotations
 
@@ -29,7 +35,9 @@ import argparse
 import asyncio
 import codecs
 import datetime as _dt
+import math
 import os
+import statistics
 import shutil
 import signal
 import sys
@@ -83,8 +91,11 @@ STREAM_INTERVALS = (           # (메시지 ID, Hz)
     (mavlink2.MAVLINK_MSG_ID_LOCAL_POSITION_NED, 5),   # 32
     (mavlink2.MAVLINK_MSG_ID_DISTANCE_SENSOR, 5),      # 132
     (mavlink2.MAVLINK_MSG_ID_SYS_STATUS, 1),           # 1
+    (mavlink2.MAVLINK_MSG_ID_ATTITUDE, 10),            # 30 (롤/피치/요 -> *_att.csv)
 )
 RANGEFINDER_DOWN = mavlink2.MAV_SENSOR_ROTATION_PITCH_270  # 25 (RNGFND1_ORIENT)
+YAW_RATE_DPS = 30.0            # 제자리 회전 속도 (CONDITION_YAW param2)
+YAW_REACHED_DEG = 5.0          # 목표 방위각과 이만큼 안이면 도달로 봄
 
 KILL_KEYS = (" ", "\r", "\n", "k")
 # 한/영 키가 한글일 때 (두벌식) 같은 자리 글자도 받아 준다
@@ -113,6 +124,10 @@ def _enum_name(enum: str, value: int, prefix: str) -> str:
 
 def cmd_name(cmd: int) -> str:
     return _enum_name("MAV_CMD", cmd, "MAV_CMD_")
+
+
+def wrap180(deg: float) -> float:
+    return (deg + 180.0) % 360.0 - 180.0
 
 
 def result_name(res: Optional[int]) -> str:
@@ -488,6 +503,8 @@ class FcState:
         self.rf_t = 0.0
         self.vbat: Optional[float] = None
         self.vbat_t = 0.0
+        self.att: Optional[tuple] = None   # (롤, 피치, 요) 도. 요는 0~360
+        self.att_t = 0.0
         self.origin_seen = False
         self.uplink_ok = False      # COMMAND_ACK 를 받아서 노트북 -> FC 방향이 확인됨
 
@@ -544,6 +561,9 @@ class N6Fly:
         self._land_sent_on_quit = False
         self._quit: Optional[asyncio.Event] = None
         self._link_up_at = 0.0
+        self._yaw_target: Optional[float] = None   # 회전 시험 중 목표 방위각 (CSV 기록용)
+        self._att_samples: Optional[list] = None   # 회전 뒤 멈춰 있는 동안 모으는 (롤, 피치, 요)
+        self._att_csv = None
 
     # ---------------- 송신 ----------------
     def _encode(self, msg) -> bytes:
@@ -643,6 +663,8 @@ class N6Fly:
         elif mtype == "DISTANCE_SENSOR":
             if msg.orientation == RANGEFINDER_DOWN:
                 s.rf_m, s.rf_t = msg.current_distance / 100.0, now
+        elif mtype == "ATTITUDE":
+            self._on_attitude(msg, now)
         elif mtype == "SYS_STATUS":
             if msg.voltage_battery not in (0xFFFF, 0):
                 s.vbat, s.vbat_t = msg.voltage_battery / 1000.0, now
@@ -655,6 +677,28 @@ class N6Fly:
             if isinstance(pid, (bytes, bytearray)):
                 pid = pid.decode("ascii", "ignore")
             self.params[pid.rstrip("\x00")] = float(msg.param_value)
+
+    def _on_attitude(self, msg, now: float) -> None:
+        s = self.s
+        att = (math.degrees(msg.roll), math.degrees(msg.pitch), math.degrees(msg.yaw) % 360.0)
+        s.att, s.att_t = att, now
+        if self._att_samples is not None:
+            self._att_samples.append(att)
+        if self._att_csv is None:
+            path = self.c.log_path.with_name(self.c.log_path.stem + "_att.csv")
+            self._att_csv = open(path, "a", encoding="utf-8", buffering=1)
+            self._att_csv.write("time,phase,target_yaw_deg,roll_deg,pitch_deg,yaw_deg,ekf_h_m,rangefinder_m\n")
+            self.c.event(f"자세 기록: {path}")
+        h = -s.lpn_z if (s.lpn_z is not None and self._fresh(s.lpn_t)) else None
+        rf = s.rf_m if (s.rf_m is not None and self._fresh(s.rf_t)) else None
+        tgt = self._yaw_target
+        cells = [_dt.datetime.now().strftime("%H:%M:%S.%f")[:-3], self._phase,
+                 "" if tgt is None else f"{tgt:.1f}", f"{att[0]:.2f}", f"{att[1]:.2f}", f"{att[2]:.2f}",
+                 "" if h is None else f"{h:.3f}", "" if rf is None else f"{rf:.3f}"]
+        try:
+            self._att_csv.write(",".join(cells) + "\n")
+        except Exception:
+            pass
 
     def _on_heartbeat(self, msg, now: float) -> None:
         if msg.get_srcSystem() != FC_SYSID or msg.get_srcComponent() != FC_COMPID:
@@ -846,6 +890,10 @@ class N6Fly:
         # EKF 높이는 FC 가 켜진 곳(원점) 기준이고 모터 바람에 흔들림 -> 거리센서(지면까지)와 나란히 표시
         parts.append(f"EKF높이 {h:+.2f}m" if h is not None else "EKF높이 -")
         parts.append(f"거리센서 {rf:.2f}m" if rf is not None else "거리센서 -")
+        if s.att is not None and self._fresh(s.att_t):
+            parts.append(f"요 {s.att[2]:5.1f}° 피치 {s.att[1]:+.1f}° 롤 {s.att[0]:+.1f}°")
+        else:
+            parts.append("자세 -")
         parts.append(f"{s.vbat:.2f}V" if (s.vbat is not None and self._fresh(s.vbat_t)) else "배터리 -")
         if self._test_task is not None and not self._test_task.done():
             parts.append(f"시험:{self._phase}")
@@ -958,8 +1006,61 @@ class N6Fly:
                 self._fs_task = asyncio.get_running_loop().create_task(self._check_failsafe_params())
             return
         self._pending_confirm = True
-        self.c.event(f"이륙 시험 {self.a.alt:.2f} m / 호버 {self.a.hover:g} s — 프롭·주변·안전줄 확인했으면 y, "
+        yaw = getattr(self.a, "yaw", 0.0)
+        turn = f" / 회전 {yaw:g}° x {self._yaw_steps()}번" if yaw else ""
+        self.c.event(f"이륙 시험 {self.a.alt:.2f} m / 호버 {self._hover_txt()}{turn} — 프롭·주변·안전줄 확인했으면 y, "
                      "취소는 다른 키. (언제든 킬 = 스페이스)")
+
+    def _hover_txt(self) -> str:
+        return "착륙 명령(스페이스)까지" if self.a.hover == math.inf else f"{self.a.hover:g} s"
+
+    def _yaw_steps(self) -> int:
+        yaw = getattr(self.a, "yaw", 0.0)
+        return max(1, round(360.0 / yaw)) if yaw else 0
+
+    async def _yaw_test(self) -> None:
+        """호버 중 제자리 회전: +yaw° 씩 시계 방향으로 돌아 한 바퀴. 회전마다 도달 시간, 방위각 오차,
+        멈춰 있는 동안 요·피치·롤 평균과 표준편차를 찍는다."""
+        a, s, c = self.a, self.s, self.c
+        steps = self._yaw_steps()
+        if s.att is None or not self._fresh(s.att_t):
+            c.event("    ⚠ ATTITUDE 가 안 들어와서 회전 시험 건너뜀")
+            return
+        yaw0 = s.att[2]
+        c.event(f"    회전 시작: 시작 방위각 {yaw0:.1f}°, {a.yaw:g}° 씩 {steps}번, {YAW_RATE_DPS:g}°/s, "
+                f"매번 {a.yaw_hold:g} s 정지")
+        for k in range(1, steps + 1):
+            target = (yaw0 + k * a.yaw) % 360.0
+            self._yaw_target = target
+            self._phase = f"회전{k}/{steps}"
+            # CONDITION_YAW: 각도, 속도, 방향(1 = 시계), 상대(1)
+            res = await self.command(mavlink2.MAV_CMD_CONDITION_YAW, a.yaw, YAW_RATE_DPS, 1, 1,
+                                     retries=0, timeout=1.5)
+            if res is not None and res != ACCEPTED:
+                raise TestFailed(f"회전 명령 거부 ({result_name(res)})")
+            t0 = time.monotonic()
+            reached = await self._wait(
+                lambda: s.att is not None and abs(wrap180(s.att[2] - target)) < YAW_REACHED_DEG,
+                a.yaw / YAW_RATE_DPS + 5.0)
+            t_reach = time.monotonic() - t0
+            self._att_samples = []
+            try:
+                await self._wait(lambda: False, a.yaw_hold)
+                samples = self._att_samples
+            finally:
+                self._att_samples = None
+            if len(samples) < 2:
+                c.event(f"    회전 {k}/{steps}: 목표 {target:.1f}° — 정지 중 ATTITUDE {len(samples)}개뿐, 통계 없음")
+                continue
+            err = [wrap180(y - target) for (_, _, y) in samples]
+            pitch = [p for (_, p, _) in samples]
+            roll = [r for (r, _, _) in samples]
+            how = f"{t_reach:.1f} s 만에 도달" if reached else f"{t_reach:.1f} s 안에 ±{YAW_REACHED_DEG:g}° 도달 못 함"
+            c.event(f"    회전 {k}/{steps}: 목표 {target:.1f}°, {how} | 정지 {len(samples)}개: "
+                    f"요 오차 {statistics.fmean(err):+.1f}° (흔들림 {statistics.pstdev(err):.1f}°), "
+                    f"피치 {statistics.fmean(pitch):+.1f}° ({statistics.pstdev(pitch):.1f}°), "
+                    f"롤 {statistics.fmean(roll):+.1f}° ({statistics.pstdev(roll):.1f}°)")
+        self._yaw_target = None
 
     def _start_test(self) -> None:
         why = self._test_preconditions()
@@ -1001,7 +1102,7 @@ class N6Fly:
     async def _takeoff_test(self) -> None:
         a, s, c = self.a, self.s, self.c
         try:
-            c.event(f"=== 이륙 시험 시작: {a.alt:.2f} m, 호버 {a.hover:g} s (킬 = 스페이스/엔터/k) ===")
+            c.event(f"=== 이륙 시험 시작: {a.alt:.2f} m, 호버 {self._hover_txt()} (킬 = 스페이스/엔터/k) ===")
             self._phase = "원점"
             await self.send_origin()
             await asyncio.sleep(0.2)
@@ -1071,8 +1172,10 @@ class N6Fly:
                 c.event(f"    8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt}) — 그대로 호버 후 착륙")
 
             self._phase = "호버"
-            c.event(f"4/6 호버 {a.hover:g} s")
+            c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
             await self._wait(lambda: False, a.hover)
+            if getattr(a, "yaw", 0.0):
+                await self._yaw_test()
 
             self._phase = "착륙"
             c.event("5/6 LAND 모드 요청")
@@ -1112,6 +1215,8 @@ class N6Fly:
             self._guard_mode = None
             self._guard_armed = False
             self._phase = ""
+            self._yaw_target = None
+            self._att_samples = None
 
     # ---------------- 실행 ----------------
     async def run(self, key_queue: "Optional[asyncio.Queue[str]]" = None) -> None:
@@ -1153,6 +1258,8 @@ class N6Fly:
             await asyncio.gather(*tasks, return_exceptions=True)
             if keys is not None:
                 keys.restore()
+            if self._att_csv is not None:
+                self._att_csv.close()
             self.c.event(f"종료. 하트비트가 멈췄으므로, 시동 상태였다면 FC 가 {FS_GCS_TIMEOUT_S}초 뒤 스스로 LAND")
 
 
@@ -1162,15 +1269,26 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--name", default="N6-DRONE-1", help="XIAO BLE 광고 이름 (기본 N6-DRONE-1)")
     p.add_argument("--alt", type=float, default=0.8, help="이륙 높이 m (기본 0.8, 허용 0.3~2.0)")
     p.add_argument("--hover", type=float, default=5.0, help="호버 시간 s (기본 5, 허용 0~30)")
+    p.add_argument("--hold", action="store_true",
+                   help="시간 제한 없이 호버. 스페이스(킬 = LAND)를 누를 때까지 떠 있음 (--hover 무시)")
+    p.add_argument("--yaw", type=float, default=0.0,
+                   help="호버 뒤 제자리 회전 각도 °. 이만큼씩 시계 방향으로 한 바퀴 (기본 0 = 회전 안 함, 허용 0~180)")
+    p.add_argument("--yaw-hold", type=float, default=3.0, help="회전마다 멈춰서 자세를 재는 시간 s (기본 3)")
     p.add_argument("--no-arm", action="store_true", help="연결·텔레메트리만 (이륙 키 비활성)")
     p.add_argument("--scan-timeout", type=float, default=8.0, help="BLE 스캔 한 번의 시간 s")
     p.add_argument("--log-dir", default=str(Path(__file__).resolve().parent / "logs"),
                    help="로그 폴더 (기본 tools/logs)")
     a = p.parse_args(argv)
+    if not 0.0 <= a.yaw <= 180.0:
+        p.error("--yaw 는 0 ~ 180° 범위로")
+    if not 0.5 <= a.yaw_hold <= 10.0:
+        p.error("--yaw-hold 는 0.5 ~ 10 s 범위로")
     if not 0.3 <= a.alt <= 2.0:
         p.error("--alt 는 0.3 ~ 2.0 m 범위로 (실내 첫 시험용 안전 범위)")
     if not 0.0 <= a.hover <= 30.0:
         p.error("--hover 는 0 ~ 30 s 범위로")
+    if a.hold:
+        a.hover = math.inf
     return a
 
 
