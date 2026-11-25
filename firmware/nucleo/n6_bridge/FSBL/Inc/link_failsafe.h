@@ -9,10 +9,13 @@
   * This module watches both directions of the bridge:
   *   - laptop -> FC : valid MAVLink2 HEARTBEAT from the GCS (sysid LINKFS_GCS_SYSID)
   *   - FC -> laptop : valid MAVLink2 HEARTBEAT from the FC (sysid 1, compid 1): armed flag + custom_mode
-  * If no GCS heartbeat for LINKFS_TIMEOUT_MS while the FC reports armed + LAND, it builds a
-  * COMMAND_LONG MAV_CMD_COMPONENT_ARM_DISARM (param1 0, param2 21196 = force) for the bridge to inject
+  * If no GCS heartbeat for LINKFS_TIMEOUT_MS and the FC has reported armed + LAND continuously for
+  * LINKFS_LAND_MS, it builds a COMMAND_LONG MAV_CMD_COMPONENT_ARM_DISARM (param1 0, param2 21196 = force) for the bridge to inject
   * towards the FC, once per LINKFS_RESEND_MS until the FC reports disarmed or the link returns.
   * Only the LAND mode triggers it, so GUIDED flight is never cut.
+  * The LAND time is counted from the FC's own mode change, not from the link loss: a 5 s test build
+  * counted from the link loss cut the motors 1.8 s into LAND while still at 0.23 m (6호기 2026-11-25,
+  * LAND barely started descending in that time).
   */
 #ifndef LINK_FAILSAFE_H
 #define LINK_FAILSAFE_H
@@ -20,7 +23,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#define LINKFS_TIMEOUT_MS   12000U  /* no GCS heartbeat this long -> cut (3 s failsafe + 9 s LAND; 1.3 m at 0.5 m/s = 2.6 s) */
+#ifndef LINKFS_TIMEOUT_MS
+#define LINKFS_TIMEOUT_MS    5000U  /* no GCS heartbeat this long (FC failsafe fires at 3 s) */
+#endif
+#ifndef LINKFS_LAND_MS
+#define LINKFS_LAND_MS       9000U  /* FC in LAND + armed this long -> cut. 1.3 m LAND took about 4 s (6호기) */
+#endif
 #define LINKFS_RESEND_MS     1000U
 #define LINKFS_FC_STALE_MS   3000U  /* FC heartbeat older than this -> FC state unknown, do nothing */
 #define LINKFS_GCS_SYSID      250U  /* = FC MAV_GCS_SYSID */
@@ -52,6 +60,8 @@ typedef struct
   uint8_t  fc_seen;
   uint8_t  fc_armed;
   uint32_t fc_mode;
+  uint32_t land_since_ms;  /* first FC heartbeat of the current LAND + armed stretch */
+  uint8_t  in_land;
   uint32_t last_cmd_ms;
   uint8_t  cmd_sent_once;
   uint8_t  seq;
@@ -134,6 +144,14 @@ static inline void LinkFs_OnFcByte(LinkFs_t *fs, uint8_t b, uint32_t now)
     fs->fc_armed = ((LinkFs_Pl(p, 6) & 0x80U) != 0U) ? 1U : 0U;   /* base_mode SAFETY_ARMED */
     fs->fc_hb_ms = now;
     fs->fc_seen = 1;
+    if (fs->fc_armed && fs->fc_mode == LINKFS_MODE_LAND)
+    {
+      if (!fs->in_land) { fs->in_land = 1; fs->land_since_ms = now; }
+    }
+    else
+    {
+      fs->in_land = 0;
+    }
   }
 }
 
@@ -147,7 +165,8 @@ static inline uint32_t LinkFs_Poll(LinkFs_t *fs, uint32_t now, uint8_t out[LINKF
   if (!fs->gcs_seen || !fs->fc_seen) { return 0; }
   if ((now - fs->gcs_hb_ms) < LINKFS_TIMEOUT_MS) { return 0; }
   if ((now - fs->fc_hb_ms) > LINKFS_FC_STALE_MS) { return 0; }
-  if (!fs->fc_armed || fs->fc_mode != LINKFS_MODE_LAND) { return 0; }
+  if (!fs->fc_armed || fs->fc_mode != LINKFS_MODE_LAND || !fs->in_land) { return 0; }
+  if ((now - fs->land_since_ms) < LINKFS_LAND_MS) { return 0; }
   if (fs->cmd_sent_once && (now - fs->last_cmd_ms) < LINKFS_RESEND_MS) { return 0; }
 
   memset(out, 0, LINKFS_FRAME_LEN);
