@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | 미확인 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v1 |
 | 5호기 | 미확인 | 미확인 | 미확인 |
-| 6호기 | n6_bridge (링크 끊김 강제 DISARM 판은 부팅 실패 후 되돌림) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | 미확인 |
+| 6호기 | n6_bridge + 링크 끊김 강제 DISARM (부팅 확인, 기능 시험 전) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | 미확인 |
 
 ## 부품별 상세
 
@@ -22,9 +22,9 @@
 | --- | --- | --- | --- |
 | 1호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
 | 4호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
-| 6호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-25 |
+| 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `44b2a0c6c1f481f83a6522b2633ce8be2a5262412e53ace6293e1877cdc8705e` | 2026-11-25 |
 
-`n6_bridge_linkfs_FSBL-trusted.bin`은 기존 브리지에 링크 끊김 강제 DISARM(`FSBL/Inc/link_failsafe.h`)을 더한 것이다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 강제 DISARM을 보낸다. 해시 `44b2a0c6c1f481f83a6522b2633ce8be2a5262412e53ace6293e1877cdc8705e`. 아직 어느 기체에도 올라가 있지 않다. 6호기에서 시험한 뒤 다른 기체에 올린다.
+`n6_bridge_linkfs_FSBL-trusted.bin`은 기존 브리지에 링크 끊김 강제 DISARM(`FSBL/Inc/link_failsafe.h`)을 더한 것이다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 강제 DISARM을 보낸다. 해시 `44b2a0c6c1f481f83a6522b2633ce8be2a5262412e53ace6293e1877cdc8705e`. 2026-11-25 6호기에 올렸고 부팅(LED1 깜빡임)을 확인했다. 링크 끊김 기능은 아직 실기 시험 전이다. 6호기에서 시험한 뒤 다른 기체에 올린다.
 
 2026-11-25 6호기에 처음 올린 판(`943b43dc…`)은 부팅하지 않았다. 서명할 때 `-align`을 빠뜨려 페이로드가 0x400이 아닌 0x240에 들어갔기 때문이다. 기존 브리지로 되돌린 뒤, `-align`을 넣어 다시 서명했다. 같은 명령으로 기존 소스를 서명하면 기존 릴리스 이미지와 헤더·페이로드가 같고, 무작위 패딩(바이트 169~576)만 다르다. 6호기의 이전 플래시(기존 브리지)는 `firmware/nucleo/backup_drone6_20261125.bin`에 백업했다(커밋하지 않음).
 
