@@ -27,6 +27,15 @@ STM32CubeN6 **V1.4.1** 의 `Projects/NUCLEO-N657X0-Q/Examples/UART/UART_TwoBoard
 EWARM/MDK-ARM 프로젝트와 `.ioc` 는 뺐습니다. **CubeMX 로 코드를 다시 생성하지 마세요**
 (예제의 `.ioc` 는 USART1 설정이라 브리지 코드를 덮어씁니다).
 
+## 서명 (trusted.bin 만들기)
+
+Release 빌드 뒤 아래처럼 서명한다. **`-align`을 빼면 페이로드가 0x400에 오지 않아 부팅하지 않는다**(2026-11-25 6호기에서 겪음).
+
+```powershell
+$p = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammerin"
+& "$p\STM32_SigningTool_CLI.exe" -bin n6_bridge_FSBL.bin -nk -of 0x80000000 -t fsbl -hv 2.3 -align -o n6_bridge_FSBL-trusted.bin -s
+```
+
 ## 디버거로 볼 변수 (Live Expressions)
 
 - D-Cache 때문에 디버거는 RAM 의 옛 값을 볼 수 있어서, 펌웨어가 0.5 s 마다(LED 토글 때) 아래 변수들을
