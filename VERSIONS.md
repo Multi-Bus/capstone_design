@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | 미확인 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v1 |
 | 5호기 | 미확인 | 미확인 | 미확인 |
-| 6호기 | n6_bridge + 링크 끊김 강제 DISARM (LAND 9초 판, 부팅 확인 전) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | 미확인 |
+| 6호기 | n6_bridge + 링크 끊김 강제 DISARM (LAND 9초 판, 부팅 확인 전) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | v3 |
 
 ## 부품별 상세
 
@@ -47,6 +47,7 @@
 | 기체 | 버전 | 근거 | 확인일 |
 | --- | --- | --- | --- |
 | 4호기 | v1 (`firmware/xiao/n6_ble_relay_v1/`) | BLE 알림 44개 중 80%가 4바이트 이하, 최대 22바이트 (`gcs/tools/diag/xiao_version.py`) | 2026-11-21 |
+| 6호기 | v3 (`firmware/xiao/n6_ble_relay_v3/`, `dfu/n6_ble_relay_v3_id6_dfu.zip`) | BLE 알림 최대 73바이트. 평소 부하(노트북→FC 초당 5개, 자세 10 Hz) 1분 시험에서 FC→노트북 손실 0.81%, v1일 때는 75% | 2026-11-25 |
 
 `firmware/xiao/n6_ble_relay_v2/`는 어느 기체에도 올라가지 않았다. FC에서 오는 데이터가 쪼개져 일부 유실되는 문제를 고친 버전이고, 올리기 전에 따로 시험해야 한다.
 
@@ -54,6 +55,8 @@
 
 - `firmware/nucleo/`, `firmware/xiao/n6_ble_relay_v2/`, `firmware/fc/base`, `firmware/fc/drones/drone1.param`, `firmware/fc/setup/`, `gcs/tools/n6_fly.py`, `gcs/tools/dev/`, `docs/archive/핸드오프/`: 팀 Dropbox 핸드오프 `n6_drone_handoff_20261120.zip`에서 가져왔다.
 - `firmware/xiao/n6_ble_relay_v1/`, `firmware/fc/drones/drone2.param`, `firmware/fc/drones/drone6_asis_20261120.param`: 이 저장소에 원래 있던 파일이다.
+- `firmware/xiao/n6_ble_relay_v3/`: 팀 Dropbox `n6_ble_relay_v3_20261125.zip`에서 가져왔다. DFU zip은 `dfu/SHA256.txt`로 해시를 확인했다.
+- v3는 노트북이 초당 50개 이상 쓰면 FC→노트북 방향이 거의 멈춘다 (2026-11-25 시험). `n6_fly`처럼 초당 5개면 문제없다.
 - `firmware/uwb/anchor_dwm3001_3to1/`: 팀 Dropbox `3001앵커_펌웨어_3to1_20261123.zip`에서 가져왔다. `backups/`(A1·A2 원래 플래시)와 `.elf`, `.map`은 빼고, 보드에 올린 `.hex`, `.bin`, `manifest.json`은 넣었다. `backups/`는 Dropbox zip에 있다.
 - `gcs/tools/diag/`, `gcs/tools/analysis/`: 이번 호버링 시험 중에 작성한 점검·로그 분석 스크립트다(옛 `tools/hover_test/`). Dropbox 자료가 아니다.
 
