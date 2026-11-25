@@ -15,7 +15,7 @@
   *     (노트북이 0.2 s 마다 HEARTBEAT, 끊기면 FS_GCS_TIMEOUT 3 s 뒤 LAND).
   *     -> 예전 설계(이 보드가 PD11을 보고 하트비트를 대신 보내던 방식)는 폐기.
   *   - 예외 하나 (2026-11-25, link_failsafe.h): HEARTBEAT 만 읽어서, 노트북 하트비트가
-  *     12 s 없는데 FC 가 LAND + 시동 ON 이면 (착지 감지 실패) 강제 DISARM 을 FC 로 넣는다.
+  *     5 s 넘게 없고 FC 가 LAND + 시동 ON 을 9 s 이어 가면 (착지 감지 실패) 강제 DISARM 을 FC 로 넣는다.
   *     GUIDED 등 다른 모드에서는 아무것도 안 한다. 그 밖의 바이트는 지금처럼 그대로 넘긴다.
   *
   *   베이스: STM32CubeN6 V1.4.1

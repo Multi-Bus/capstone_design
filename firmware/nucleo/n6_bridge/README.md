@@ -16,7 +16,7 @@ STM32CubeN6 **V1.4.1** 의 `Projects/NUCLEO-N657X0-Q/Examples/UART/UART_TwoBoard
 | 경로 | 내용 |
 |---|---|
 | `FSBL/Src/main.c` | 브리지 본체 (링버퍼 2×4 KB, 폴링 루프, 보드레이트 오차 검사, LED) |
-| `FSBL/Inc/link_failsafe.h` | 링크 끊김 강제 DISARM. 양방향 HEARTBEAT만 읽는다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 `COMMAND_LONG 400`(param2 21196)을 넣는다 |
+| `FSBL/Inc/link_failsafe.h` | 링크 끊김 강제 DISARM. 양방향 HEARTBEAT만 읽는다. 노트북 하트비트가 5초 넘게 없고 FC가 LAND + 시동 ON을 9초 이어 가면 FC에 `COMMAND_LONG 400`(param2 21196)을 넣는다 |
 | `test/test_link_failsafe.py` | 위 헤더의 호스트 시험 (gcc + pymavlink). `python firmware/nucleo/n6_bridge/test/test_link_failsafe.py` |
 | `FSBL/Src/stm32n6xx_hal_msp.c` | USART2/UART7 커널 클럭(PCLK1)·핀 설정 |
 | `FSBL/Inc/main.h` | 링버퍼 크기, 핀 정의 |
