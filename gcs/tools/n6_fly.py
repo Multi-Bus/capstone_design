@@ -1267,7 +1267,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="N6 드론 BLE 비행 스크립트 (이륙 → 호버 → 착륙, 킬 = 스페이스)")
     p.add_argument("--name", default="N6-DRONE-1", help="XIAO BLE 광고 이름 (기본 N6-DRONE-1)")
-    p.add_argument("--alt", type=float, default=0.8, help="이륙 높이 m (기본 0.8, 허용 0.3~2.0)")
+    p.add_argument("--alt", type=float, default=0.8, help="이륙 높이 m (기본 0.8, 허용 0.3~1.6)")
     p.add_argument("--hover", type=float, default=5.0, help="호버 시간 s (기본 5, 허용 0~30)")
     p.add_argument("--hold", action="store_true",
                    help="시간 제한 없이 호버. 스페이스(킬 = LAND)를 누를 때까지 떠 있음 (--hover 무시)")
@@ -1283,8 +1283,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         p.error("--yaw 는 0 ~ 180° 범위로")
     if not 0.5 <= a.yaw_hold <= 10.0:
         p.error("--yaw-hold 는 0.5 ~ 10 s 범위로")
-    if not 0.3 <= a.alt <= 2.0:
-        p.error("--alt 는 0.3 ~ 2.0 m 범위로 (실내 첫 시험용 안전 범위)")
+    if not 0.3 <= a.alt <= 1.6:
+        p.error("--alt 는 0.3 ~ 1.6 m 범위로 (FC 고도 펜스가 1.7 m 위로 못 올라가게 막음)")
     if not 0.0 <= a.hover <= 30.0:
         p.error("--hover 는 0 ~ 30 s 범위로")
     if a.hold:
