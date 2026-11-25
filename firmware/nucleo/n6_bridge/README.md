@@ -4,7 +4,7 @@
 XIAO nRF52840 --USART2 115200 (PA2 TX / PF6 RX, AF7)--> [NUCLEO] --UART7 921600 (PH4 TX / PE7 RX, AF8)--> FC SERIAL4
 ```
 
-바이트를 양방향으로 그대로 넘기기만 합니다(MAVLink 해석 없음, 인터럽트·DMA 없음, 폴링).
+바이트를 양방향으로 그대로 넘깁니다(인터럽트·DMA 없음, 폴링). MAVLink는 링크 끊김 강제 DISARM을 위해 HEARTBEAT만 읽습니다.
 빌드·플래시·시험 절차는 저장소 루트의 **`README_KO.md`** 를 보세요.
 
 ## 출처
@@ -16,6 +16,8 @@ STM32CubeN6 **V1.4.1** 의 `Projects/NUCLEO-N657X0-Q/Examples/UART/UART_TwoBoard
 | 경로 | 내용 |
 |---|---|
 | `FSBL/Src/main.c` | 브리지 본체 (링버퍼 2×4 KB, 폴링 루프, 보드레이트 오차 검사, LED) |
+| `FSBL/Inc/link_failsafe.h` | 링크 끊김 강제 DISARM. 양방향 HEARTBEAT만 읽는다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 `COMMAND_LONG 400`(param2 21196)을 넣는다 |
+| `test/test_link_failsafe.py` | 위 헤더의 호스트 시험 (gcc + pymavlink). `python firmware/nucleo/n6_bridge/test/test_link_failsafe.py` |
 | `FSBL/Src/stm32n6xx_hal_msp.c` | USART2/UART7 커널 클럭(PCLK1)·핀 설정 |
 | `FSBL/Inc/main.h` | 링버퍼 크기, 핀 정의 |
 | `FSBL/Src/stm32n6xx_it.c`, `system_stm32n6xx_fsbl.c`, 그 외 `Inc/*` | 예제 그대로 |

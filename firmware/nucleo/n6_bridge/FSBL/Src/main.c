@@ -14,6 +14,9 @@
   *   - 링크 끊김 안전장치는 이 보드가 아니라 FC의 GCS 페일세이프가 담당한다
   *     (노트북이 0.2 s 마다 HEARTBEAT, 끊기면 FS_GCS_TIMEOUT 3 s 뒤 LAND).
   *     -> 예전 설계(이 보드가 PD11을 보고 하트비트를 대신 보내던 방식)는 폐기.
+  *   - 예외 하나 (2026-11-25, link_failsafe.h): HEARTBEAT 만 읽어서, 노트북 하트비트가
+  *     12 s 없는데 FC 가 LAND + 시동 ON 이면 (착지 감지 실패) 강제 DISARM 을 FC 로 넣는다.
+  *     GUIDED 등 다른 모드에서는 아무것도 안 한다. 그 밖의 바이트는 지금처럼 그대로 넘긴다.
   *
   *   베이스: STM32CubeN6 V1.4.1
   *           Projects/NUCLEO-N657X0-Q/Examples/UART/UART_TwoBoards_ComPolling
@@ -43,6 +46,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdlib.h>
+#include "link_failsafe.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -115,6 +119,7 @@ UartStats_t g_stat_ble;   /* USART2 */
 UartStats_t g_stat_fc;    /* UART7  */
 uint32_t    g_pclk1_hz;
 volatile uint8_t g_xiao_link_up;   /* PD11 상태 (1 = XIAO 가 BLE 연결됨이라고 표시) */
+LinkFs_t g_linkfs;                 /* 링크 끊김 강제 DISARM 상태 (g_linkfs.cuts = 보낸 횟수) */
 
 /* USER CODE END PV */
 
@@ -125,7 +130,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_UART7_Init(void);
 /* USER CODE BEGIN PFP */
 static void Bridge_CheckBaud(const UART_HandleTypeDef *huart, UartStats_t *st);
-static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from, UartStats_t *st);
+static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from, UartStats_t *st, uint8_t from_fc);
+static void Bridge_LinkFailsafe(void);
 static void Bridge_Led(void);
 static void Bridge_PublishDebug(void);
 /* USER CODE END PFP */
@@ -234,8 +240,9 @@ int main(void)
     /* 레지스터 접근은 huartX.Instance 로 한다. 이 프로젝트는 -mcmse(보안) 빌드라
      * USART2/UART7 매크로가 *_S 별칭으로 풀리는데, Instance 를 쓰면 HAL 초기화에
      * 쓴 것과 같은 주소를 쓰게 되어 보안/비보안 별칭이 섞일 일이 없다. */
-    Bridge_PollUart(huart7.Instance, &rb_fc2ble, &rb_ble2fc, &g_stat_fc);   /* FC  쪽 */
-    Bridge_PollUart(huart2.Instance, &rb_ble2fc, &rb_fc2ble, &g_stat_ble);  /* BLE 쪽 */
+    Bridge_PollUart(huart7.Instance, &rb_fc2ble, &rb_ble2fc, &g_stat_fc, 1U);   /* FC  쪽 */
+    Bridge_PollUart(huart2.Instance, &rb_ble2fc, &rb_fc2ble, &g_stat_ble, 0U);  /* BLE 쪽 */
+    Bridge_LinkFailsafe();
     Bridge_Led();
   }
   /* USER CODE END 3 */
@@ -508,10 +515,11 @@ static void Bridge_CheckBaud(const UART_HandleTypeDef *huart, UartStats_t *st)
   *         2) RXFNE 인 동안 RDR 을 읽어 rx_to 링버퍼에 넣는다
   *         3) TXFNF 이고 tx_from 에 보낼 게 있으면 TDR 에 쓴다
   */
-static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from, UartStats_t *st)
+static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from, UartStats_t *st, uint8_t from_fc)
 {
   uint32_t isr = uart->ISR;
   uint32_t n;
+  uint32_t now = HAL_GetTick();
 
   if ((isr & USART_ERR_FLAGS) != 0U)
   {
@@ -524,8 +532,11 @@ static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from,
 
   for (n = 0U; (n < RX_DRAIN_MAX) && ((uart->ISR & USART_ISR_RXNE_RXFNE) != 0U); n++)
   {
-    Ring_Push(rx_to, (uint8_t)(uart->RDR & 0xFFU));
+    uint8_t b = (uint8_t)(uart->RDR & 0xFFU);
+    Ring_Push(rx_to, b);
     st->rx_bytes++;
+    if (from_fc != 0U) { LinkFs_OnFcByte(&g_linkfs, b, now); }
+    else               { LinkFs_OnGcsByte(&g_linkfs, b, now); }
   }
 
   while ((Ring_Count(tx_from) != 0U) && ((uart->ISR & USART_ISR_TXE_TXFNF) != 0U))
@@ -533,6 +544,19 @@ static void Bridge_PollUart(USART_TypeDef *uart, Ring_t *rx_to, Ring_t *tx_from,
     uart->TDR = Ring_Pop(tx_from);
     st->tx_bytes++;
   }
+}
+
+/**
+  * @brief  노트북 하트비트가 끊긴 채 FC 가 LAND + 시동 ON 이면 강제 DISARM 프레임을 FC 쪽으로 넣는다.
+  *         노트북 바이트가 섞이지 않게 BLE->FC 링버퍼가 비어 있을 때만 넣는다 (끊긴 뒤라 보통 비어 있음).
+  */
+static void Bridge_LinkFailsafe(void)
+{
+  uint8_t frame[LINKFS_FRAME_LEN];
+  uint32_t i;
+  if (Ring_Count(&rb_ble2fc) != 0U) { return; }
+  if (LinkFs_Poll(&g_linkfs, HAL_GetTick(), frame) == 0U) { return; }
+  for (i = 0; i < LINKFS_FRAME_LEN; i++) { Ring_Push(&rb_ble2fc, frame[i]); }
 }
 
 /**
