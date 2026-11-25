@@ -32,7 +32,7 @@ EWARM/MDK-ARM 프로젝트와 `.ioc` 는 뺐습니다. **CubeMX 로 코드를 �
 Release 빌드 뒤 아래처럼 서명한다. **`-align`을 빼면 페이로드가 0x400에 오지 않아 부팅하지 않는다**(2026-11-25 6호기에서 겪음).
 
 ```powershell
-$p = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammerin"
+$p = "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin"
 & "$p\STM32_SigningTool_CLI.exe" -bin n6_bridge_FSBL.bin -nk -of 0x80000000 -t fsbl -hv 2.3 -align -o n6_bridge_FSBL-trusted.bin -s
 ```
 
