@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | 미확인 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v1 |
 | 5호기 | 미확인 | 미확인 | 미확인 |
-| 6호기 | 링크 끊김 강제 DISARM 시험판 (정식판으로 되돌려야 함) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | 미확인 |
+| 6호기 | n6_bridge + 링크 끊김 강제 DISARM (LAND 9초 판, 부팅 확인 전) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | 미확인 |
 
 ## 부품별 상세
 
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | 1호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
 | 4호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
-| 6호기 | 시험판 (링크 끊김 5초, 커밋 안 함) | `17a25ca6ff570b44ea8a3809916c5b9391a4c965585b38024228eb7183f97700` | 2026-11-25 |
+| 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-25 |
 
 `n6_bridge_linkfs_FSBL-trusted.bin`은 기존 브리지에 링크 끊김 강제 DISARM(`FSBL/Inc/link_failsafe.h`)을 더한 것이다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 강제 DISARM을 보낸다. 해시 `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654`. 노트북 하트비트가 5초 넘게 없고 FC가 LAND + 시동 ON을 9초 이어 가면 강제 DISARM한다. LAND 시간은 FC가 LAND로 바뀐 때부터 센다.
 
