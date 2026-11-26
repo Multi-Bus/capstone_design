@@ -83,6 +83,7 @@ ATC_RAT_PIT_FLTD,40
 ATC_RAT_PIT_FLTT,40
 ATC_RAT_YAW_FLTT,40
 ATC_RAT_YAW_FLTE,2
+ATC_RAT_YAW_I,0.03     # 기본 0.018. 이륙 때 요가 20~30° 밀리는 것을 2초쯤 빨리 되돌림 (2026-11-26 3호기)
 
 # 고도 펜스 (2026-11-25). 위로 치솟으면 FC가 스스로 LAND. 노트북 링크가 끊겨도 동작
 FENCE_ENABLE,1
