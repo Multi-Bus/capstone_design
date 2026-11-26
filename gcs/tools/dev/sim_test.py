@@ -772,11 +772,47 @@ async def s17_move():
         check("s17 시험 완료", "시험 완료" in txt and not fc.armed)
 
 
+async def s18_manual():
+    """--manual: 키 하나에 한 칸, 이동 중 누른 키는 버림, 1 m 넘는 목표 거부, r = 시작점, 스페이스로 착륙."""
+    (OUT / "s18_manual.log").unlink(missing_ok=True)
+    async with Scenario("s18_manual", manual=True, step=0.3, hover=0.3) as sc:
+        fc = sc.fc
+        fc.x, fc.y = 1.0, -2.0
+        psi = math.radians(40.0)
+        await sc.key("t")
+        await sc.key("y")
+        await sc.wait(lambda: sc.app._phase == "수동대기", 20)
+        await sc.key("UP")
+        for k in ("UP", "w", "RIGHT"):          # 이동 중 연타 -> 모두 버려야 함
+            await asyncio.sleep(0.05)
+            await sc.key(k)
+        await sc.wait(lambda: "앞 → 앞 +0.30" in sc.text(), 10)
+        await sc.wait(lambda: sc.app._phase == "수동대기", 5)
+        txt = sc.text()
+        check("s18 이동 중 키 무시", txt.count("이동 중 — 입력 무시") == 3, str(txt.count("이동 중 — 입력 무시")))
+        check("s18 한 칸만 감", math.hypot(fc.x - (1.0 + 0.3 * math.cos(psi)), fc.y - (-2.0 + 0.3 * math.sin(psi))) < 0.12,
+              f"{fc.x:.2f}, {fc.y:.2f}")
+        for _ in range(3):                       # 앞 0.6, 0.9, 1.2(거부)
+            await sc.key("w")
+            await sc.wait(lambda: sc.app._phase == "수동대기" and not sc.app._manual_busy, 10)
+            await asyncio.sleep(0.1)
+        check("s18 1 m 넘는 목표 거부", "1.20 m 라서 거부" in sc.text(), "")
+        far = max(fc.pos_targets, key=lambda p: math.hypot(p[2] - 1.0, p[3] + 2.0))
+        check("s18 최대 0.9 m", abs(math.hypot(far[2] - 1.0, far[3] + 2.0) - 0.9) < 1e-3)
+        await sc.key("r")
+        await sc.wait(lambda: "시작점 → 앞 +0.00" in sc.text(), 10)
+        check("s18 r 시작점 복귀", math.hypot(fc.x - 1.0, fc.y + 2.0) < 0.12, f"{fc.x:.2f}, {fc.y:.2f}")
+        check("s18 방위각·높이 고정", all(abs(p[5] - psi) < 0.05 and abs(p[4] + 0.8) < 0.05 for p in fc.pos_targets))
+        await sc.key(" ")
+        await sc.wait(lambda: not fc.armed, 20)
+        check("s18 스페이스로 착륙", not fc.armed and not sc.app._manual_on)
+
+
 async def main():
     random.seed(1)
     only = sys.argv[1:]
     for fn in (s11_blelink_disconnect, s10_ble_fragment_lock, s1_normal, s2_kill, s3_mode_change, s4_short_drop, s4b_long_drop,
-               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm, s15_yaw, s16_hold, s17_move):
+               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm, s15_yaw, s16_hold, s17_move, s18_manual):
         if only and fn.__name__ not in only:
             continue
         try:
