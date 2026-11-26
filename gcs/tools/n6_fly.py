@@ -82,6 +82,10 @@ HEARTBEAT_PERIOD_S = 0.2       # 5 Hz
 FS_GCS_TIMEOUT_S = 3           # 기준값: FC 의 FS_GCS_TIMEOUT 과 같아야 함 (다르면 연결 시 경고)
 FC_STALE_S = float(FS_GCS_TIMEOUT_S)  # FC 메시지가 이만큼 없으면 "끊김" 으로 본다
 FRESH_S = 2.0                  # 텔레메트리 값이 이보다 오래되면 표시 안 함
+# LAND 인데 기압계/거리센서 오차로 FC 가 착지를 감지 못해 시동이 안 꺼질 때 (3호기 2026-11-25):
+# 센서와 상관없이 LAND + 시동 ON 이 이만큼 이어지면 강제 DISARM. 0.5 m 에서 LAND 는 3.5~5 초, 1.3 m 는 하강 2.6 초가 더 걸림.
+# 링크가 살아 있을 때만 동작. BLE 가 끊긴 경우는 NUCLEO 브리지(firmware/nucleo/n6_bridge/FSBL/Inc/link_failsafe.h)가 맡음.
+LAND_DISARM_S = 9.0
 EKF_ORIGIN = (37.5665, 126.9780, 0.0)   # 임의 고정 좌표 (위도, 경도, 고도 m). GPS 없이 GUIDED 하려고 필요
 FORCE_DISARM_MAGIC = 21196
 LAND_REPEAT = 3                # 킬: LAND 명령을 3번
@@ -557,6 +561,7 @@ class N6Fly:
         self._land_after_relink = False
         self._pending_confirm = False
         self._last_x = 0.0
+        self._land_since = 0.0         # LAND + 시동 ON 이 시작된 시각
         self._quitting = False
         self._land_sent_on_quit = False
         self._quit: Optional[asyncio.Event] = None
@@ -902,7 +907,29 @@ class N6Fly:
     async def _status_loop(self) -> None:
         while True:
             self.c.status(self._status_text())
+            await self._land_disarm_check()
             await asyncio.sleep(1.0)
+
+    async def _land_disarm_check(self) -> None:
+        s, now = self.s, time.monotonic()
+        if not (s.armed and s.custom_mode == MODE_LAND):
+            self._land_since = 0.0
+            return
+        if self._land_since == 0.0:
+            self._land_since = now
+            return
+        if now - self._land_since >= LAND_DISARM_S and self.link.connected:
+            self._land_since = now  # 안 꺼지면 다시 같은 시간 뒤
+            self.c.event(f"LAND {LAND_DISARM_S:g}초가 지났는데 시동 ON → FC 가 착지를 감지 못함. 강제 DISARM 전송")
+            await self._force_disarm()
+
+    async def _force_disarm(self) -> None:
+        for i in range(LAND_REPEAT):
+            await self.send(self.tx.command_long_encode(
+                FC_SYSID, FC_COMPID, mavlink2.MAV_CMD_COMPONENT_ARM_DISARM, i,
+                0, FORCE_DISARM_MAGIC, 0, 0, 0, 0, 0))
+            if i < LAND_REPEAT - 1:
+                await asyncio.sleep(LAND_REPEAT_GAP_S)
 
     # ---------------- 키 ----------------
     async def _key_loop(self, q: "asyncio.Queue[str]") -> None:
@@ -958,12 +985,7 @@ class N6Fly:
             self.c.event("비상 정지: BLE 끊김 상태라 못 보냄")
             return
         self.c.event("비상 모터 정지! 강제 DISARM 전송")
-        for i in range(LAND_REPEAT):
-            await self.send(self.tx.command_long_encode(
-                FC_SYSID, FC_COMPID, mavlink2.MAV_CMD_COMPONENT_ARM_DISARM, i,
-                0, FORCE_DISARM_MAGIC, 0, 0, 0, 0, 0))
-            if i < LAND_REPEAT - 1:
-                await asyncio.sleep(LAND_REPEAT_GAP_S)
+        await self._force_disarm()
 
     async def request_quit(self, why: str) -> None:
         self._cancel_test(f"종료({why})")
