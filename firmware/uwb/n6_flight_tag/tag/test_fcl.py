@@ -20,6 +20,7 @@ FRAME_US = 20000
 GUIDED, LAND, LOITER = 4, 9, 5
 RUN = 1
 FAILS = []
+__test__ = False  # 스크립트로 실행한다 (python tag/test_fcl.py). pytest 가 test_* 함수를 모으지 않게 한다.
 
 
 def check(name, got, want=True, tol=None):
