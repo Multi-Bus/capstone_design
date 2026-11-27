@@ -7,7 +7,7 @@
 
 | 기체 | NUCLEO 브리지 | FC 펌웨어 / 파라미터 | XIAO BLE 릴레이 |
 | --- | --- | --- | --- |
-| 1호기 | n6_bridge | 4.7.3, base + `drone1.param` | v3 |
+| 1호기 | n6_flight_tag (`tagf-v2-lfs` id0: BLE 중계 + UWB 태그 + SD 기록 + 링크 끊김 강제 DISARM) | 4.7.3, base + `drone1.param` | v3 |
 | 2호기 | 미확인 | 미확인 (`drone2.param` 있음) | v3 |
 | 3호기 | 미확인 | 미확인 | v3 |
 | 4호기 | n6_flight_tag (`tagf-v2-lfs` id3: BLE 중계 + UWB 태그 + SD 기록 + 링크 끊김 강제 DISARM) | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v3 |
@@ -20,7 +20,7 @@
 
 | 기체 | 올라간 파일 | 해시 | 확인일 |
 | --- | --- | --- | --- |
-| 1호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
+| 1호기 | `firmware/uwb/n6_flight_tag/build/n6_flight_tagf_v2lfs_id0-trusted.bin` (보드 ST-LINK SN `002300413335511135383531`) | `2f81edc620a6bf087b5230655640a545228d8055179da2265878d7bdd75c1e6f` | 2026-11-27 |
 | 4호기 | `firmware/uwb/n6_flight_tag/build/n6_flight_tagf_v2lfs_id3-trusted.bin` (보드 ST-LINK SN `0036004D3335510735383531`) | `7b482faf505432f988d8cb3d4b23b7269b423bb02bed0ae3b7c22eade8d9dadb` | 2026-11-27 |
 | 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-25 |
 
@@ -35,6 +35,8 @@
 2026-11-26 4호기 NUCLEO에는 UWB 통신용 펌웨어(112,608바이트, 시작 주소 `0x34182c89`)가 올라가 있었다. 그 플래시를 `firmware/nucleo/backup_drone4_20261126.bin`에 백업하고(커밋하지 않음) 위 브리지를 다시 써서 검증(`-v`)했다.
 
 2026-11-27 4호기 보드(SN `0036004D…`)의 외부 플래시를 읽어 `firmware/nucleo/backup_0036004D_20261127.bin`에 백업했다(커밋하지 않음). 앞부분이 `n6_bridge_linkfs_FSBL-trusted.bin`과 같았다. 11-25 기록에는 이 SN이 2호기 보드로 적혀 있어 보드가 기체 사이에서 바뀐 것으로 보인다. 그 뒤 `n6_flight_tagf_v2lfs_id3-trusted.bin`(`firmware/uwb/n6_flight_tag/`)을 쓰고 다시 읽어 같은 것을 확인했다. 쓰기 전 RAM 실행에서 UWB 거리, SD 카드 응답(`card=1`, 기록 파일은 아직 없음), FC 하트비트 수신을 확인했다. 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 `n6_fly.py --no-arm`으로 BLE 연결, 노트북→FC(COMMAND_ACK), FC→노트북(HEARTBEAT, 상태줄)을 확인했고, 1.3 m 호버를 했다.
+
+2026-11-27 1호기 보드(SN `00230041…`)의 외부 플래시를 읽어 `firmware/nucleo/backup_00230041_20261127.bin`에 백업했다(커밋하지 않음). 들어 있던 것은 팀원 펌웨어 `tagf-v3.1`이었다(위 표의 `n6_bridge`는 그 전 기록). RAM 실행에서 `TF_READY`, SD(`ready=1`, `file=ok`, 앞 기록 뒤에 이어 씀), FC 하트비트 수신(10초에 24 kB, 오류 0)을 확인했다. 앵커가 꺼져 있어 UWB 거리는 확인하지 못했다. 그 뒤 `n6_flight_tagf_v2lfs_id0-trusted.bin`을 쓰고 다시 읽어 같은 것을 확인했다. 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 `n6_fly.py --no-arm`으로 BLE 연결과 양방향 통신을 확인했다.
 
 ### FC 파라미터 (`fc/`)
 
