@@ -21,7 +21,7 @@ MAX_LEN = 512 * 1024
 RAM = (0x341C0000, 0x34200000)
 
 
-def build(image: bytes, tag_id: int, fw_name: str = "tagf-v2-lfs") -> bytes:
+def build(image: bytes, tag_id: int, fw_name: str = "tagf-v2-log") -> bytes:
     if not 0 <= tag_id <= 255:
         raise ValueError("tag id must be 0..255")
     if not 8 <= len(image) <= MAX_LEN:
@@ -54,7 +54,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("image", type=Path, help="--app-link 펌웨어의 .bin")
     p.add_argument("--tag-id", type=int, required=True, help="기체 번호 - 1 (0~5)")
-    p.add_argument("--name", default="tagf-v2-lfs", help="로더 줄에 남길 펌웨어 이름 (12글자까지)")
+    p.add_argument("--name", default="tagf-v2-log", help="로더 줄에 남길 펌웨어 이름 (12글자까지)")
     where = p.add_mutually_exclusive_group(required=True)
     where.add_argument("--drive", help="카드의 맨 위 폴더 (예: E:\\)")
     where.add_argument("--out", type=Path, help="파일로만 만들 경로")

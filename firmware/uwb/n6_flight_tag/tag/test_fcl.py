@@ -202,7 +202,13 @@ def test_requests(lib):
     lib.fcl_tick(b.now)
     to_fc, _ = b.take()
     req = {int(m.param1): m.param2 for m in to_fc if m.get_type() == "COMMAND_LONG" and m.command == 511}
-    check("HEARTBEAT 를 보면 위치(32)와 자세(30)의 간격을 요청", req, {32: 20000.0, 30: 100000.0})
+    check("HEARTBEAT 를 보면 위치(32)와 자세(30), 거리센서(132)의 간격을 요청", req,
+          {32: 20000.0, 30: 100000.0, 132: 50000.0})
+    for _ in range(2):                         # 기록용 메시지는 tick 마다 하나씩
+        b.now += 20
+        lib.fcl_tick(b.now)
+        req.update({int(m.param1): m.param2 for m in b.take()[0] if m.get_type() == "COMMAND_LONG"})
+    check("그다음 tick 들에서 광류(100) 20 Hz, 배터리(1) 2 Hz", (req.get(100), req.get(1)), (50000.0, 500000.0))
     check("보내는 쪽 번호 (sysid 251, compid 191)", {(m.get_srcSystem(), m.get_srcComponent()) for m in to_fc}, {(251, 191)})
     check("받는 쪽 번호 (비행 제어기 1/1)", {(m.target_system, m.target_component) for m in to_fc}, {(1, 1)})
     n = 0
@@ -213,7 +219,7 @@ def test_requests(lib):
         if _ % 50 == 0:
             b.heartbeat()
         lib.fcl_tick(b.now)
-        n += len(b.take()[0])
+        n += sum(1 for m in b.take()[0] if int(m.param1) in (30, 32))
     check("값이 오는 동안 다시 요청한 횟수", n, 0)
     for _ in range(200):                       # 위치가 끊기면 2초마다 다시
         b.now += 20
@@ -222,6 +228,55 @@ def test_requests(lib):
         lib.fcl_tick(b.now)
         n += sum(1 for m in b.take()[0] if int(m.param1) == 32)
     check("위치가 4초 끊긴 동안 다시 요청한 횟수", n, 2, tol=1)
+    n = 0
+    for i in range(1000):                      # 값이 계속 와도 10초마다 다시 요청 (노트북이 간격을 덮어쓰므로)
+        b.now += 20
+        b.position()
+        if i % 50 == 0:
+            b.heartbeat()
+        lib.fcl_tick(b.now)
+        n += sum(1 for m in b.take()[0] if int(m.param1) == 32)
+    check("위치가 오는 20초 동안 다시 요청한 횟수 (10초마다)", n, 2, tol=1)
+
+
+def test_logging(lib):
+    print("\n--- 8) 기록 줄: 거리센서, 광류, 배터리, 노트북 명령, C 줄의 FC 시각")
+    b = Bench(lib)
+    b.heartbeat()
+    b.fc_send(mav.MAVLink_distance_sensor_message(123456, 5, 800, 131, 10, 0, 25, 0, signal_quality=77))
+    b.fc_send(mav.MAVLink_optical_flow_message(123456789, 0, 12, -34, 0.25, -0.5, 255, 1.31, 0.0125, -0.5))
+    b.fc_send(mav.MAVLink_sys_status_message(0, 0, 0, 345, 15890, 1234, 87, 0, 0, 0, 0, 0, 0))
+    b.gcs_send(mav.MAVLink_set_position_target_local_ned_message(
+        4321, 1, 1, 8, 0x5C7, 0.5, -1.0, -1.3, 0.3, -0.2, 0.0, 0, 0, 0, math.radians(90), math.radians(-10)))
+    b.gcs_send(mav.MAVLink_command_long_message(1, 1, 400, 0, 0, 21196, 0, 0, float("nan"), 0, 0))
+    b.fc_send(mav.MAVLink_attitude_message(777, 0.1, 0.0, 0.0, 0, 0, 0))
+    b.fc_send(mav.MAVLink_local_position_ned_message(888, 1.0, 2.0, -1.0, 0, 0, 0))
+    b.lib.shim_control(10, 0, 0, 0, 255, 0, 0, 1, b.now)
+    rows = {line.split(",")[0]: line.split(",") for line in b.lines()}
+    check("A 줄 (FC 시각, 거리 cm, 최소, 최대, 방향, 품질)", rows.get("A", [])[2:], ["123456", "131", "5", "800", "25", "77"])
+    check("O 줄 (FC ms, flow_x, flow_y, 보정 mm/s, 높이 mm, 품질, 각속도 mrad/s)", rows.get("O", [])[2:],
+          ["123456", "12", "-34", "250", "-500", "1310", "255", "12", "-500"])
+    check("B 줄 (mV, cA, 남은 %, 부하, 손실)", rows.get("B", [])[2:], ["15890", "1234", "87", "345", "0"])
+    check("G 줄 (노트북 250, FC ms, 기준 8, 표시, mm, mm/s, 요 cdeg, 요속 cdeg/s)", rows.get("G", [])[2:],
+          ["250", "4321", "8", "05C7", "500", "-1000", "-1300", "300", "-200", "0", "9000", "-1000"])
+    check("M 줄 (노트북 250, 명령 400, 값 x1000, NaN 은 0)", rows.get("M", [])[2:],
+          ["250", "400", "0", "21196000", "0", "0", "0", "0", "0"])
+    c = rows.get("C", [])
+    check("C 줄 칸 수 22, 끝 두 칸 = 위치와 자세의 FC 시각", (len(c), c[-2:]), (22, ["888", "777"]))
+    _, to_ble = b.take()
+    check("거리센서, 광류, 배터리도 노트북에 넘김 (처음 한 번)",
+          sorted({m.get_type() for m in to_ble} & {"DISTANCE_SENSOR", "OPTICAL_FLOW", "SYS_STATUS"}),
+          ["DISTANCE_SENSOR", "OPTICAL_FLOW", "SYS_STATUS"])
+    for _ in range(4):                         # 50 ms 마다 거리센서: 노트북에는 190 ms 안에 한 번만
+        b.now += 50
+        b.fc_send(mav.MAVLink_distance_sensor_message(b.now, 5, 800, 131, 10, 0, 25, 0))
+    _, to_ble = b.take()
+    lines = b.lines()
+    check("20 Hz 거리센서: 기록은 4줄, 노트북에는 1개",
+          (sum(1 for x in lines if x.startswith("A,")), sum(1 for m in to_ble if m.get_type() == "DISTANCE_SENSOR")),
+          (4, 1))
+    b.gcs_send(mav.MAVLink_heartbeat_message(mav.MAV_TYPE_GCS, mav.MAV_AUTOPILOT_INVALID, 0, 0, 0, 3))
+    check("노트북 HEARTBEAT 는 기록하지 않음", b.lines(), [])
 
 
 def test_script(lib):
@@ -256,7 +311,7 @@ def test_script(lib):
     events = [line.split(",")[2] for line in lines if line.startswith("E,")]
     check("사건: start, done", [e for e in events if e in ("start", "done")], ["start", "done"])
     c = [line.split(",") for line in lines if line.startswith("C,")]
-    check("C 줄: 칸 수 20", {len(x) for x in c}, {20})
+    check("C 줄: 칸 수 22 (끝 두 칸 FC 시각)", {len(x) for x in c}, {22})
     row = next(x for x in c if x[1] == "1600")
     check("C 줄(프레임 1600): 상태 2, 줄 0, 명령 300 mm/s", (row[15], row[16], row[17], row[18]), ("2", "0", "300", "0"))
 
@@ -466,6 +521,7 @@ def main():
     test_safety(lib)
     test_script_table(lib)
     test_linkfs(lib)
+    test_logging(lib)
     print(f"\n{'모두 통과' if not FAILS else '실패 ' + str(len(FAILS)) + '개: ' + ', '.join(FAILS)}")
     sys.exit(1 if FAILS else 0)
 

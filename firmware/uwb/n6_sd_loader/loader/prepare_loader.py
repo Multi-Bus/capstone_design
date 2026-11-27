@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("--fsbl-copy", required=True, type=Path, help="FSBL directory in a disposable handoff copy")
     parser.add_argument("--tag-id", required=True, type=int, help="기체 번호 - 1 (0~5). 기본 펌웨어와 같아야 함")
     parser.add_argument("--builtin", required=True, type=Path, help="--app-link 펌웨어의 .bin (기본 펌웨어)")
-    parser.add_argument("--builtin-name", default="tagf-v2-lfs", help="로더 줄에 남길 기본 펌웨어 이름")
+    parser.add_argument("--builtin-name", default="tagf-v2-log", help="로더 줄에 남길 기본 펌웨어 이름")
     parser.add_argument("--st-package", required=True, type=Path, help="HAL SD 드라이버가 있는 STM32Cube N6 패키지")
     args = parser.parse_args()
     try:

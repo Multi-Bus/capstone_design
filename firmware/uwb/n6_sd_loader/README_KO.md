@@ -6,14 +6,14 @@
 ## 상태 (2026-11-27)
 
 - PC 시험: `python -m pytest firmware/uwb/n6_sd_loader/tools/test_sd_app.py` 18개 통과 (헤더 형식, CRC, 거부 이유 각각, `--app-link` 패치).
-- 빌드: 6개 기체(id0~id5) 모두 펌웨어(`--app-link`)와 로더 오류 0, 경고 0. 로더 이미지 약 165 KB(FSBL 자리 255 KB 안).
+- 빌드: 6개 기체(id0~id5) 모두 펌웨어(`--app-link`)와 로더 오류 0, 경고 0. 로더 이미지 약 168 KB(FSBL 자리 255 KB 안).
 - **보드에서는 아직 시험하지 않았다.** DESIGN_KO.md 8장의 2~6단계를 한 기체에서 끝낸 뒤 플래시에 쓴다.
 
 ## 파일
 
 | 파일 | 무엇 |
 | --- | --- |
-| `build/loader_id<N>-trusted.bin` | 외부 플래시용 로더 (기본 펌웨어 `tagf-v2-lfs` id N 포함). 지금 브리지와 같은 명령으로 `0x70000000`에 쓴다 |
+| `build/loader_id<N>-trusted.bin` | 외부 플래시용 로더 (기본 펌웨어 `tagf-v2-log` id N 포함). 지금 브리지와 같은 명령으로 `0x70000000`에 쓴다 |
 | `build/app_id<N>.bin` | SD용 펌웨어 원본 (`--app-link`). `tools/sd_app.py`로 헤더를 붙여 카드에 쓴다 |
 | `build/SHA256.txt` | 위 파일들의 SHA-256 |
 | `loader/` | 로더 소스와 설치 스크립트 |

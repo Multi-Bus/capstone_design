@@ -72,7 +72,7 @@
 #include "radio.h"
 #include "tag_antenna_delay.h"
 
-#define TAG_FW "tagf-v2-lfs"   /* v2 + n6_bridge link_failsafe.h */
+#define TAG_FW "tagf-v2-log"   /* v2 + n6_bridge link_failsafe.h + 기록 늘림(A, O, B, G, M 줄, C 줄 FC 시각) */
 #ifndef TAGF_ID
 #error TAGF_ID (0 .. UWBF_TAGS - 1) 를 정해야 합니다.
 #endif
@@ -1154,7 +1154,7 @@ static void run_bundle(struct uwb3_key key, const struct uwbf_frame *info, uint6
 /* This entry is called by the handoff project's TEST_DS_TWR_RESPONDER selection. */
 int ds_twr_responder(void)
 {
-    char line[200];
+    char line[256];
     tagf_board_init();
     reset_DWIC();
     Sleep(2);
@@ -1181,11 +1181,19 @@ int ds_twr_responder(void)
     dwt_setpreambledetecttimeout(0);
     dwt_setrxtimeout(0);
     test_run_info((unsigned char *)"TF_READY,channel=5");
+    /* SD 로더(firmware/uwb/n6_sd_loader)가 남긴 부팅 출처: 'L' << 24 | 출처 << 8 | 이유. 읽고 지운다 */
+    __HAL_RCC_RTCAPB_CLK_ENABLE();
+    const uint32_t boot = TAMP->BKP1R;
+    HAL_PWR_EnableBkUpAccess();
+    TAMP->BKP1R = 0;
+    const bool by_loader = (boot >> 24) == 'L';
     snprintf(line, sizeof(line), "TF_INFO,fw=" TAG_FW ",id=%u,tags=%u,addr=%u,ant_dly=%u,records=%u,sd=%u,flight=%u,"
-             "frame_us=%u,data_bytes=%u,xchg_bytes=%u,early_rearm=%u,opt=" TAGF_BUILD_OPT,
+             "frame_us=%u,data_bytes=%u,xchg_bytes=%u,early_rearm=%u,opt=" TAGF_BUILD_OPT ",boot=%s,boot_reason=%u",
              (unsigned)TAGF_ID, (unsigned)UWBF_TAGS, (unsigned)(UWB3_TAG + TAGF_ID), (unsigned)UWB3_ANTENNA_DELAY,
              (unsigned)RECORDS, (unsigned)TAGF_SD, (unsigned)TAGF_FLIGHT, (unsigned)TAGF_FRAME_US,
-             (unsigned)UWBF_DATA_LEN, (unsigned)UWBF_XCHG_LEN, (unsigned)TAGF_EARLY_REARM);
+             (unsigned)UWBF_DATA_LEN, (unsigned)UWBF_XCHG_LEN, (unsigned)TAGF_EARLY_REARM,
+             !by_loader ? "direct" : ((boot >> 8) & 0xFFU) == 1U ? "sd" : "builtin",
+             by_loader ? (unsigned)(boot & 0xFFU) : 0U);
     test_run_info((unsigned char *)line);
 #if TAGF_SD
     {

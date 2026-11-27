@@ -220,6 +220,7 @@ class TagLog:
     controls: list = field(default_factory=list)    # ControlRec
     leds: list = field(default_factory=list)        # (열쇠, 켬, PC 시각)
     fc: list = field(default_factory=list)          # (열쇠, [C 줄의 칸들], PC 시각)
+    extra: dict = field(default_factory=dict)       # A(거리센서) O(광류) B(배터리) G(노트북 목표) M(노트북 명령) -> [(열쇠, [칸들], PC 시각)]
     events: list = field(default_factory=list)      # (열쇠, 이름, a, b, PC 시각)
     stats: list = field(default_factory=list)
     sd: list = field(default_factory=list)          # D 줄: [프레임, 상태, 다음 섹터, 쓴 섹터, 버린 글자, 오류, ...]
@@ -252,6 +253,10 @@ class TagLog:
     def is_present(self, key):
         self.present()
         return key in self._present_set
+
+
+# 줄 머리 -> 칸 수 (tagf-v2-log). 칸 뜻은 n6_flight_tag/README_KO.md 의 기록 표
+EXTRA_FIELDS = {"A": 8, "O": 11, "B": 7, "G": 14, "M": 11}
 
 
 def _int_or_none(text):
@@ -295,9 +300,12 @@ def _parse_tag_line(text, host, log):
         return "K", v[0], ControlRec(*v, host)
     if head == "L" and len(c) == 3:
         return "L", int(c[1]), (int(c[2]), host)
-    if head == "C" and len(c) == 20:
+    if head == "C" and len(c) in (20, 22):          # 22: tagf-v2-log 부터 끝에 위치·자세의 FC 시각
         values = [_int_or_none(x) for x in c[2:]]
         return "C", int(c[1]), (values, host)
+    if head in EXTRA_FIELDS and len(c) == EXTRA_FIELDS[head]:
+        return "X", int(c[1]), (head, [int(x, 16) if head == "G" and i == 3 else int(x) for i, x in enumerate(c[2:])],
+                                host)
     if head == "E" and len(c) >= 3 and c[2]:
         rest = c[3:] + ["", ""]
         return "E", int(c[1]), (c[2], rest[0], rest[1], host)
@@ -307,7 +315,7 @@ def _parse_tag_line(text, host, log):
     if head == "D" and len(c) == 11:
         log.sd.append([int(x) for x in c[1:]])
         return "-", None, None
-    if head in ("F", "R", "P", "K", "L", "C", "E", "S", "D"):
+    if head in ("F", "R", "P", "K", "L", "C", "E", "S", "D", *EXTRA_FIELDS):
         raise ValueError(text)          # 아는 종류인데 칸 수가 다르다: 잘리거나 깨진 줄
     return None
 
@@ -368,6 +376,8 @@ def parse_tag_log(path):
             log.leds.append((key, rec[0], rec[1]))
         elif kind == "C":
             log.fc.append((key, rec[0], rec[1]))
+        elif kind == "X":
+            log.extra.setdefault(rec[0], []).append((key, rec[1], rec[2]))
         elif kind == "E":
             log.events.append((key, rec[0], rec[1], rec[2], rec[3]))
         state["cur"] = frame if state["cur"] is None else max(state["cur"], frame)

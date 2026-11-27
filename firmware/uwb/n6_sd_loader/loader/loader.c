@@ -24,6 +24,22 @@ extern const uint8_t loader_builtin_start[], loader_builtin_end[];
 
 static uint8_t block[512] __attribute__((aligned(32)));
 
+/* 펌웨어가 TF_INFO 에 남기는 부팅 이유 번호 (TAMP->BKP1R 의 아래 8비트). 순서를 바꾸지 말 것: DESIGN_KO.md 6장 */
+static const char *const reasons[] = { "", "no_card", "no_fat", "no_file", "fragmented", "read_error", "bad_magic",
+                                       "bad_version", "wrong_id", "bad_length", "bad_crc", "bad_vectors",
+                                       "after_reset" };
+
+static void note_boot(unsigned source, const char *reason)
+{
+    unsigned code = 0;
+    for (unsigned i = 1; reason != NULL && i < sizeof(reasons) / sizeof(reasons[0]); ++i) {
+        if (strcmp(reason, reasons[i]) == 0) {
+            code = i;
+        }
+    }
+    TAMP->BKP1R = ((uint32_t)'L' << 24) | ((uint32_t)source << 8) | code;   /* 출처 1 = SD, 2 = 기본 */
+}
+
 static const char *fat_reason(enum sdfat_result result)
 {
     switch (result) {
@@ -135,6 +151,7 @@ int ds_twr_responder(void)
                header.name, (unsigned long)header.length, (unsigned long)header.crc,
                (unsigned long)(HAL_GetTick() - t0));
         TAMP->BKP0R = SD_MARK;
+        note_boot(1, NULL);
         start_app(APP_LOAD_ADDR);
     }
     const uint32_t length = (uint32_t)(loader_builtin_end - loader_builtin_start);
@@ -147,5 +164,6 @@ int ds_twr_responder(void)
         for (;;) {                            /* 기본 펌웨어가 망가진 빌드: 넘어가지 않는다 */
         }
     }
+    note_boot(2, reason);
     start_app(APP_LOAD_ADDR);
 }

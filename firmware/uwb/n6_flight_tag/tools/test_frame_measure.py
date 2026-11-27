@@ -474,9 +474,26 @@ def sim_tests(tmp):
               f"heartbeat 방송 손실 {fm.pct(seg['broadcast_totals']['H']['message']['loss_rate'])}")
 
 
+def log_line_tests(tmp):
+    print("--- 기록 줄 (tagf-v2-log): A, O, B, G, M, 22칸 C")
+    path = tmp / "tag0.raw.log"
+    path.write_text("\n".join([
+        "TF_INFO,fw=tagf-v2-log,id=0,tags=6,boot=sd,boot_reason=0", "F,100,00000000,0,01,A,0,0,0",
+        "A,100,123456,131,5,800,25,77", "O,100,123456,12,-34,250,-500,1310,255,12,-500", "B,100,15890,1234,87,345,0",
+        "G,100,250,4321,8,05C7,500,-1000,-1300,300,-200,0,9000,-1000", "M,100,250,400,0,21196000,0,0,0,0,0",
+        "C,100," + ",".join(["1"] * 20), "A,100,1,2"]) + "\n", encoding="utf-8")
+    log = fm.parse_tag_log(path)
+    check("A O B G M 를 한 줄씩 읽음", sorted((k, len(v)) for k, v in log.extra.items()),
+          [("A", 1), ("B", 1), ("G", 1), ("M", 1), ("O", 1)])
+    check("G 의 무시 표시는 16진수", log.extra["G"][0][1][3], 0x5C7)
+    check("22칸 C 줄도 읽음", len(log.fc), 1)
+    check("부팅 출처", log.info.get("boot"), "sd")
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="fm_test_") as tmp:
         tmp = Path(tmp)
+        log_line_tests(tmp)
         fake_tests(tmp)
         if "--no-sim" in sys.argv:
             SKIPPED.append("모의시험 (--no-sim)")

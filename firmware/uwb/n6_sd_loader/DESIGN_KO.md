@@ -15,7 +15,7 @@ NUCLEO-N657 브리지 펌웨어를 바꿀 때마다 점퍼를 바꾸고 ST-LINK�
 ```
 
 - 점퍼는 비행용 그대로 둔다. 점퍼를 바꾸는 것은 로더를 처음 쓸 때와 로더 자체를 고칠 때뿐이다.
-- 기본 펌웨어는 지금 기체에 올라간 것(`tagf-v2-lfs`, 기체별 id)과 같은 소스로 빌드한다. SD 카드가 없거나 파일이 나빠도 지금과 똑같이 난다.
+- 기본 펌웨어는 지금 기체에 올라간 것(`tagf-v2-lfs`, 기체별 id)에 기록을 늘린 `tagf-v2-log`다(`n6_flight_tag/README_KO.md`). 중계와 비행 동작은 같다. SD 카드가 없거나 파일이 나빠도 이것으로 난다.
 - 펌웨어를 바꾸는 방법: 배터리를 빼고, SD 카드를 PC에서 바꾸고, 다시 꽂고 배터리를 연결한다.
 
 ## 2. 메모리 배치
@@ -49,7 +49,7 @@ FAT32 카드 맨 위 폴더에 둔다. 기록 파일 `UWBLOG.BIN`과 같은 카�
 | 8 | 4 | 올릴 주소 `0x34000400` |
 | 12 | 4 | 펌웨어 길이 (바이트) |
 | 16 | 4 | 펌웨어 CRC-32 (IEEE, zlib 과 같음) |
-| 20 | 12 | 펌웨어 이름 (예 `tagf-v2-lfs`, 남는 칸 0) |
+| 20 | 12 | 펌웨어 이름 (예 `tagf-v2-log`, 남는 칸 0) |
 
 ## 4. 로더가 검사하는 것
 
@@ -95,11 +95,16 @@ FAT32 카드 맨 위 폴더에 둔다. 기록 파일 `UWBLOG.BIN`과 같은 카�
 로더는 ST-LINK 가상 COM(921600)에 한 줄을 남긴다. 그다음 줄부터는 펌웨어의 줄(`TF_READY` 등)이다.
 
 ```
-LDR,ver=1,id=3,src=sd,fw=tagf-v2-lfs,len=113376,crc=0x1234abcd,ms=640
+LDR,ver=1,id=3,src=sd,fw=tagf-v2-log,len=113376,crc=0x1234abcd,ms=640
 LDR,ver=1,id=3,src=builtin,reason=no_file,len=113376,ms=600
 ```
 
 `reason`: `no_card`, `no_fat`, `no_file`, `fragmented`, `read_error`, `bad_magic`, `bad_version`, `wrong_id`, `bad_length`, `bad_crc`, `bad_vectors`, `after_reset`.
+
+로더는 넘기기 전에 `TAMP->BKP1R`에 `'L' << 24 | 출처 << 8 | 이유 번호`를 남긴다(출처 1 = SD, 2 = 기본).
+펌웨어(`tagf-v2-log`)는 켤 때 이 값을 읽고 지운 뒤 SD 기록의 `TF_INFO` 줄 끝에 `boot=sd|builtin|direct,boot_reason=<번호>`로 남긴다.
+`direct`는 로더 없이 켜진 경우(RAM 시험 등). 이유 번호는 위 `reason` 목록의 순서다: 0 없음, 1 `no_card`, 2 `no_fat`, 3 `no_file`,
+4 `fragmented`, 5 `read_error`, 6 `bad_magic`, 7 `bad_version`, 8 `wrong_id`, 9 `bad_length`, 10 `bad_crc`, 11 `bad_vectors`, 12 `after_reset`.
 
 ## 7. 만들 것
 
