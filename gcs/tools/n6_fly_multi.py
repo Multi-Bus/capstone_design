@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as _dt
+import shutil
 import signal
 from pathlib import Path
 from typing import Callable, List
@@ -36,19 +37,67 @@ HELP = (
 n6_fly.HELP = "연결 시작"   # 기체마다 찍는 단일 기체 도움말 대신
 
 
-class TaggedConsole(Console):
-    """기체별 상태를 독립된 줄로 출력하고 원래 형식으로 파일에 기록한다."""
+class StatusBoard:
+    """Keep the last terminal rows for telemetry, in command-line order."""
 
-    def __init__(self, log_path: Path, tag: str):
+    def __init__(self, tags):
+        self.rows = dict.fromkeys(tags, "연결 대기")
+        self.drawn = False
+
+    @staticmethod
+    def row(tag: str, text: str, width: int) -> str:
+        line = f"[{tag}] {text}"
+        if n6_fly._clip(line, width) == line:
+            return line
+        for label, short in ((" | ", " "), ("BLE OK", "BLE"), ("링크 ", ""),
+                             ("시동 ", ""), ("EKF높이 ", "EKF"), ("거리센서 ", "RF"),
+                             ("요 ", "Y"), ("피치 ", "P"), ("롤 ", "R")):
+            line = line.replace(label, short)
+        return n6_fly._clip(line, width)
+
+    def redraw(self, event: str = "") -> None:
+        output = ""
+        if self.drawn:
+            output = "\r"
+            if len(self.rows) > 1:
+                output += f"\x1b[{len(self.rows) - 1}A"
+            output += "\x1b[J"
+        if event:
+            output += event + "\n"
+        width = max(1, shutil.get_terminal_size().columns - 1)
+        output += "\n".join(self.row(tag, text, width)
+                            for tag, text in self.rows.items())
+        print(output, end="", flush=True)
+        self.drawn = True
+
+    def finish(self) -> None:
+        if self.drawn:
+            print(flush=True)
+            self.drawn = False
+
+
+class TaggedConsole(Console):
+
+    def __init__(self, log_path: Path, tag: str, board: StatusBoard):
         super().__init__(log_path)
         self.tag = tag
+        self.board = board
 
     def event(self, text: str) -> None:
-        super().event(f"[{self.tag}] {text}")
+        message = f"[{self.tag}] {text}"
+        if self._live:
+            self._to_log(message)
+            self.board.redraw(f"{self._stamp(False)} {message}")
+        else:
+            super().event(message)
 
     def status(self, text: str) -> None:
         self._to_log(f"[상태] {text}")
-        print(f"{self._stamp(False)} [{self.tag}] {text}", flush=True)
+        if self._live:
+            self.board.rows[self.tag] = text
+            self.board.redraw()
+        else:
+            print(f"{self._stamp(False)} [{self.tag}] {text}", flush=True)
 
 
 class GroupFlight:
@@ -130,9 +179,10 @@ async def amain(args: argparse.Namespace) -> None:
     stamp = f"{_dt.datetime.now():%Y%m%d_%H%M%S}"
     flies: List[N6Fly] = []
     queues: List["asyncio.Queue[str]"] = []
-    for name in args.names:
-        tag = "D" + name.rsplit("-", 1)[-1]
-        console = TaggedConsole(Path(args.log_dir) / f"n6_fly_{tag}_{stamp}.log", tag)
+    tags = ["D" + name.rsplit("-", 1)[-1] for name in args.names]
+    board = StatusBoard(tags)
+    for name, tag in zip(args.names, tags):
+        console = TaggedConsole(Path(args.log_dir) / f"n6_fly_{tag}_{stamp}.log", tag, board)
         fly = N6Fly(args, console, BleLink(name, console, args.scan_timeout))
         flies.append(fly)
         queues.append(asyncio.Queue())
@@ -203,6 +253,7 @@ async def amain(args: argparse.Namespace) -> None:
                 await group.monitor
         finally:
             keys.restore()
+            board.finish()
             for f in flies:
                 f.c.close()
 

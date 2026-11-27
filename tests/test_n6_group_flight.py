@@ -1,6 +1,9 @@
 """Offline flight-sequence tests with a virtual clock and one simulated FC per link."""
 import asyncio
+import io
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +12,33 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gcs" / "tools"))
 import n6_fly as single
 import n6_fly_multi as multi
+
+
+class StatusDisplay(unittest.TestCase):
+    def test_two_rows_across_flights_and_events(self):
+        with tempfile.TemporaryDirectory() as tmp, patch("sys.stdout", new_callable=io.StringIO) as out:
+            board = multi.StatusBoard(["D3", "D6"])
+            consoles = [multi.TaggedConsole(Path(tmp) / tag, tag, board) for tag in board.rows]
+            for console in consoles:
+                console._live = True
+                self.addCleanup(console.close)
+            with patch.object(multi.shutil, "get_terminal_size", return_value=os.terminal_size((80, 24))):
+                for phase in ("대기", "이륙", "착륙", "재이륙"):
+                    for console in reversed(consoles):
+                        console.status(f"EKF높이 +0.90m | 요 20° 피치 +1° 롤 +2° | {phase}")
+                    out.seek(0)
+                    out.truncate()
+                    consoles[0].event(phase)
+                    message, first, second = out.getvalue().splitlines()[-3:]
+                    self.assertIn("\x1b[1A\x1b[J", message)
+                    self.assertIn(f"[D3] {phase}", message)
+                    self.assertTrue(first.startswith("[D3] EKF높이"))
+                    self.assertTrue(second.startswith("[D6] EKF높이"))
+                    self.assertTrue(first.endswith(phase) and second.endswith(phase))
+                board.finish()
+            for console in consoles:
+                console.close()
+                self.assertEqual(console.log_path.read_text("utf8").count("[상태]"), 4)
 
 
 class SimFly(single.N6Fly):
