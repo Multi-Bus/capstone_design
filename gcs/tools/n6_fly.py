@@ -45,7 +45,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 try:
     from bleak import BleakClient, BleakScanner
@@ -225,7 +225,11 @@ class Console:
         self._status = text
         self._to_log(f"[상태] {text}")
         if self._live:
-            sys.stdout.write("\r\x1b[2K" + self._status_line())
+            # 좁은 터미널에서는 전체 상태를 줄바꿈해 자세와 전압도 볼 수 있게 한다.
+            sys.stdout.write("\r\x1b[2K" + text)
+            if self._status_line() != text:
+                sys.stdout.write("\n")
+                self._status = ""
         else:
             sys.stdout.write(f"{self._stamp(False)} [상태] {text}\n")
         sys.stdout.flush()
@@ -1121,7 +1125,7 @@ class N6Fly:
                 return False
             await asyncio.sleep(0.05)
 
-    async def _takeoff_test(self) -> None:
+    async def _takeoff_test(self, group_hover: Optional[Callable[["N6Fly"], Awaitable[None]]] = None) -> None:
         a, s, c = self.a, self.s, self.c
         try:
             c.event(f"=== 이륙 시험 시작: {a.alt:.2f} m, 호버 {self._hover_txt()} (킬 = 스페이스/엔터/k) ===")
@@ -1168,6 +1172,8 @@ class N6Fly:
             c.event(f"    시동 확인 ({how})")
 
             self._phase = "이륙"
+            if group_hover:
+                self._check_guards()
             target = a.alt - 0.1
             c.event(f"3/6 이륙 명령 (목표 {a.alt:.2f} m, {target:.2f} m 넘으면 도달로 봄)")
             # 재전송 안 함: 첫 명령이 먹었는데 ACK 만 잃으면 재전송이 '이미 비행 중' 으로 거부됨
@@ -1190,12 +1196,17 @@ class N6Fly:
             h_txt = f"{h:.2f} m" if h is not None else "알 수 없음"
             if reached:
                 c.event(f"    {h_txt} 도달 ({time.monotonic() - t0:.1f} s)")
+            elif group_hover:
+                raise TestFailed(f"8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt})")
             else:
                 c.event(f"    8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt}) — 그대로 호버 후 착륙")
 
-            self._phase = "호버"
-            c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
-            await self._wait(lambda: False, a.hover)
+            if group_hover:
+                await group_hover(self)
+            else:
+                self._phase = "호버"
+                c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
+                await self._wait(lambda: False, a.hover)
             if getattr(a, "yaw", 0.0):
                 await self._yaw_test()
 
@@ -1205,6 +1216,8 @@ class N6Fly:
             res = await self.command(mavlink2.MAV_CMD_DO_SET_MODE,
                                      mavlink2.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, MODE_LAND)
             if res is not None and res != ACCEPTED:
+                if group_hover:
+                    raise TestFailed(f"LAND 거부 ({result_name(res)})")
                 c.event(f"    ⚠ LAND 거부 ({result_name(res)}) — 스페이스(킬)로 다시 시도하세요")
             if res == ACCEPTED:
                 s.custom_mode = MODE_LAND
@@ -1212,6 +1225,8 @@ class N6Fly:
                 self._guard_mode = MODE_LAND   # 누가 LAND 를 풀면(조종기 등) 시험 종료
                 c.event("    LAND 확인")
             else:
+                if group_hover:
+                    raise TestFailed("5초 안에 LAND 확인 안 됨")
                 c.event("    ⚠ 5초 안에 LAND 확인 안 됨 — 스페이스(킬)로 다시 시도하세요")
 
             self._phase = "착지대기"
@@ -1224,8 +1239,12 @@ class N6Fly:
         except TestAborted as e:
             if e.link:
                 self._land_after_relink = True
+            if group_hover:
+                raise
             c.event(f"■ 시험 중단: {e} — 자동으로 GUIDED 로 되돌리지 않음. 필요하면 스페이스(킬)")
         except TestFailed as e:
+            if group_hover:
+                raise
             c.event(f"■ 시험 실패: {e}")
             if s.armed and s.custom_mode == MODE_GUIDED and self.link.connected:
                 c.event("    시동 상태라 LAND 전송")

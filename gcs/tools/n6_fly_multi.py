@@ -9,7 +9,8 @@ n6_fly_multi.py — n6_fly.py 를 여러 대(최대 4대)에 동시에. 키 하�
   x x        : 모든 기체 강제 DISARM (공중이면 추락!)
   q          : 종료 (시동 상태면 LAND 먼저)      h = 도움말
 
-기체마다 BLE 연결, 하트비트, GCS 페일세이프, 시험 순서, 로그 파일은 n6_fly.py 그대로 따로 돈다.
+각 기체가 상승 기준에 도달하면 공통 호버 시간을 재고 함께 LAND를 요청한다.
+번호 키는 해당 기체를 시험에서 빼고 바로 착륙시킨다. 남은 기체는 시험을 계속한다.
 
   python n6_fly_multi.py --names N6-DRONE-1,N6-DRONE-4 --alt 0.6 --hover 20
   python n6_fly_multi.py --names N6-DRONE-1,N6-DRONE-3,N6-DRONE-4,N6-DRONE-5 --no-arm
@@ -21,10 +22,10 @@ import asyncio
 import datetime as _dt
 import signal
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import n6_fly
-from n6_fly import BleLink, Console, KeyReader, N6Fly, HANGUL_KEYS, KILL_KEYS, mode_name
+from n6_fly import BleLink, Console, KeyReader, N6Fly, HANGUL_KEYS, KILL_KEYS
 
 MAX_DRONES = 4
 HELP = (
@@ -36,46 +37,94 @@ n6_fly.HELP = "연결 시작"   # 기체마다 찍는 단일 기체 도움말 �
 
 
 class TaggedConsole(Console):
-    """이벤트 앞에 [D4] 를 붙이고, 상태줄은 모든 기체 요약을 한 줄로 보여 준다."""
+    """기체별 상태를 독립된 줄로 출력하고 원래 형식으로 파일에 기록한다."""
 
-    def __init__(self, log_path: Path, tag: str, board: Dict[str, str]):
+    def __init__(self, log_path: Path, tag: str):
         super().__init__(log_path)
         self.tag = tag
-        self.board = board
-        self.summary = lambda: ""
 
     def event(self, text: str) -> None:
         super().event(f"[{self.tag}] {text}")
 
     def status(self, text: str) -> None:
-        self._to_log(f"[상태] {text}")          # 로그에는 자세한 상태
-        self.board[self.tag] = self.summary()
-        self._status = "  ‖  ".join(self.board.values())
-        if self._live:
-            print("\r\x1b[2K" + self._status_line(), end="", flush=True)
+        self._to_log(f"[상태] {text}")
+        print(f"{self._stamp(False)} [{self.tag}] {text}", flush=True)
 
 
-def summary(tag: str, fly: N6Fly) -> str:
-    s = fly.s
-    if not fly.link.connected:
-        return f"{tag} BLE끊김"
-    rf = f"{s.rf_m:.2f}m" if (s.rf_m is not None and fly._fresh(s.rf_t)) else "-m"
-    v = f"{s.vbat:.1f}V" if (s.vbat is not None and fly._fresh(s.vbat_t)) else "-V"
-    phase = f" {fly._phase}" if fly._phase else ""
-    return f"{tag} {mode_name(s.custom_mode)} {'ON' if s.armed else 'off'} {rf} {v}{phase}"
+class GroupFlight:
+    """One confirmed trial. Only the coordinator releases the flight tasks to LAND."""
+
+    def __init__(self, flies: List[N6Fly]):
+        self.hover_seconds = flies[0].a.hover
+        self.members = set(flies)
+        self.ready = set()
+        self.land = asyncio.Event()
+        self.tasks = {}
+        for fly in flies:
+            task = asyncio.create_task(fly._takeoff_test(self.hold))
+            fly._test_task = self.tasks[fly] = task
+        self.monitor = asyncio.create_task(self.run())
+
+    async def hold(self, fly: N6Fly) -> None:
+        fly._phase = "다른 기체 대기"
+        self.ready.add(fly)
+        await self.land.wait()
+
+    def withdraw(self, fly: N6Fly) -> None:
+        if fly in self.members:
+            self.members.remove(fly)
+            fly._cancel_test("수동 조작")
+
+    async def abort(self, source: N6Fly, exc: Exception) -> None:
+        reason = f"{source.link.name} 공통 시험 중단: {exc}"
+        for member in self.members:
+            member.c.event(reason)
+            member._cancel_test(reason)
+            if not member.link.connected or (member is source and getattr(exc, "link", False)):
+                member._land_after_relink = True
+        await asyncio.gather(*(member._send_mode_burst(n6_fly.MODE_LAND, "공통 시험 중단")
+                               for member in self.members if member.link.connected))
+
+    async def run(self) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = None
+        try:
+            while self.members:
+                for fly in tuple(self.members):
+                    task = self.tasks[fly]
+                    try:
+                        if task.cancelled():
+                            raise n6_fly.TestFailed(fly._cancel_reason)
+                        if task.done():
+                            task.result()
+                            self.members.remove(fly)
+                        else:
+                            fly._check_guards()
+                    except Exception as exc:
+                        await self.abort(fly, exc)
+                        return
+                if not self.members:
+                    break
+                if deadline is None and self.members <= self.ready:
+                    deadline = loop.time() + self.hover_seconds
+                    for fly in self.members:
+                        fly._phase = "호버"
+                        fly.c.event(f"4/6 전체 도달 — 공통 호버 {fly._hover_txt()}")
+                if deadline is not None and loop.time() >= deadline:
+                    self.land.set()
+                await asyncio.sleep(0.05)
+        finally:
+            await asyncio.gather(*self.tasks.values(), return_exceptions=True)
 
 
 async def amain(args: argparse.Namespace) -> None:
     stamp = f"{_dt.datetime.now():%Y%m%d_%H%M%S}"
-    board: Dict[str, str] = {}
     flies: List[N6Fly] = []
     queues: List["asyncio.Queue[str]"] = []
     for name in args.names:
         tag = "D" + name.rsplit("-", 1)[-1]
-        console = TaggedConsole(Path(args.log_dir) / f"n6_fly_{tag}_{stamp}.log", tag, board)
+        console = TaggedConsole(Path(args.log_dir) / f"n6_fly_{tag}_{stamp}.log", tag)
         fly = N6Fly(args, console, BleLink(name, console, args.scan_timeout))
-        console.summary = lambda t=tag, f=fly: summary(t, f)
-        board[tag] = f"{tag} 연결 대기"
         flies.append(fly)
         queues.append(asyncio.Queue())
 
@@ -91,7 +140,10 @@ async def amain(args: argparse.Namespace) -> None:
     runs = [loop.create_task(f.run(q)) for f, q in zip(flies, queues)]
     say(f"대상 {', '.join(args.names)} — 키 입력 {keys.mode}\n{HELP}")
 
+    group = None
+
     async def dispatch() -> None:
+        nonlocal group
         pending = False
         while True:
             key = await keys_q.get()
@@ -99,18 +151,25 @@ async def amain(args: argparse.Namespace) -> None:
             low = key.lower() if len(key) == 1 else key
             if low in KILL_KEYS or low in ("x", "q", "CTRL_C", "EOF"):
                 pending = False
+                if group and (low in KILL_KEYS or low in ("q", "CTRL_C")):
+                    for fly in flies:
+                        group.withdraw(fly)
                 for q in queues:
                     q.put_nowait(low)
             elif low.isdigit() and 1 <= int(low) <= len(flies):
                 pending = False
+                if group:
+                    group.withdraw(flies[int(low) - 1])
                 queues[int(low) - 1].put_nowait("k")
             elif pending:
                 pending = False
                 if low != "y":
                     say("전체 이륙 시험 취소")
-                elif all(not f._test_preconditions() for f in flies):
-                    for f in flies:
-                        f._start_test()
+                elif (group is None or group.monitor.done()) and all(not f._test_preconditions() for f in flies):
+                    if len(flies) == 1:
+                        flies[0]._start_test()
+                    else:
+                        group = GroupFlight(flies)
                 else:
                     say("이륙 시험 못 함: 그사이 준비가 풀린 기체가 있음 (t 부터 다시)")
             elif low == "t":
@@ -130,6 +189,8 @@ async def amain(args: argparse.Namespace) -> None:
         await asyncio.gather(*runs)
     finally:
         disp.cancel()
+        if group:
+            await group.monitor
         keys.restore()
         for f in flies:
             f.c.close()
