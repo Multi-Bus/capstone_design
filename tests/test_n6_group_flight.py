@@ -105,7 +105,7 @@ class Flights(unittest.IsolatedAsyncioTestCase):
                 fly.tick()
             await asyncio.sleep(0)
 
-    async def start(self, delay=4, solo=False):
+    async def start(self, delay=4, solo=False, floor=False):
         args = SimpleNamespace(alt=1.0, hover=10, no_arm=False, names=["D-1", "D-6"],
                                log_dir=".", scan_timeout=1)
 
@@ -122,6 +122,11 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         if solo:
             fly = make_fly(args, Mock(), SimpleNamespace(name="D-6", connected=True))
             fly.delay = delay
+            if floor:
+                fly._floor_test = True
+                fly.a.alt = 1.3
+                fly.s.rf_max_m = 8.0
+                fly.s.rf_floor_valid = True
             await fly._handle_key("t")
             await fly._handle_key("y")
             return
@@ -218,6 +223,63 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         await self.advance(1)
         await fly._test_task
         self.assertAlmostEqual(fly.land_times[0] - fly.takeoff, 18, delta=0.25)
+
+    async def test_floor_reference_and_normal_landing(self):
+        await self.start(delay=1, solo=True, floor=True)
+        fly, = self.flies
+        tick = fly.tick
+        def floor_samples():
+            tick()
+            # Absolute range passes at 1.21 m; rise from the 0.15 m baseline is only 1.06 m.
+            fly.s.rf_m = 1.21 if fly.s.rf_m > 1 else 0.15
+            fly.s.lpn_z, fly.s.lpn_t = -0.86, self.now
+        fly.tick = floor_samples
+        await self.advance(13)
+        await fly._test_task
+        self.assertEqual(fly.nav_targets, [1.3])
+        self.assertEqual(len(fly.land_times), 1)
+        self.assertAlmostEqual(fly.land_times[0] - fly.takeoff, 11, delta=0.25)
+        self.assertFalse(fly.s.armed)
+
+    async def test_floor_rejects_ekf_only_arrival(self):
+        await self.start(solo=True, floor=True)
+        fly, = self.flies
+        await self.advance(1)
+        tick = fly.tick
+        def low_range():
+            tick()
+            fly.s.lpn_z, fly.s.lpn_t = -1.30, self.now
+            fly.s.rf_m = 0.75
+        fly.tick = low_range
+        await self.advance(9)
+        self.assertEqual(len(fly.land_times), 3)
+        self.assertFalse(any("4/6" in str(call) for call in fly.c.event.call_args_list))
+
+    async def test_floor_stale_during_hover_requests_land(self):
+        await self.start(solo=True, floor=True)
+        fly, = self.flies
+        await self.advance(1)
+        def sample():
+            fly.s.rf_m, fly.s.rf_t, fly.s.last_rx = 1.30, self.now, self.now
+        fly.tick = sample
+        await self.advance(1)
+        self.assertEqual(fly._phase, "호버")
+        fly.tick = lambda: setattr(fly.s, "last_rx", self.now)
+        await self.advance(1)
+        self.assertEqual(len(fly.land_times), 3)
+
+    async def test_floor_rejects_invalid_range_frames(self):
+        await self.start(solo=True, floor=True)
+        fly, = self.flies
+        for stamp, (distance, quality) in enumerate([(0, 0), (65535, 0), (801, 0), (130, 1)]):
+            msg = single.mavlink2.MAVLink_distance_sensor_message(
+                stamp, 1, 800, distance, 0, 0, single.RANGEFINDER_DOWN, 0, signal_quality=quality)
+            msg._header.srcSystem = single.FC_SYSID
+            msg._header.srcComponent = single.FC_COMPID
+            fly._handle(msg, self.now)
+            self.assertIsNone(fly._floor_height())
+        fly._cancel_test("test finished")
+        await asyncio.gather(fly._test_task, return_exceptions=True)
 
     async def test_double_x_during_group_hover(self):
         await self.start()
