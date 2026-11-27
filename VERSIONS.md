@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | v3 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v3 |
 | 5호기 | 미확인 | 미확인 | v3 |
-| 6호기 | n6_flight_tag (`tagf-v2-lfs` id5: BLE 중계 + UWB 태그 + SD 기록 + 링크 끊김 강제 DISARM) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | v3 |
+| 6호기 | n6_flight_tag (`tagf-v2-lfs` id5: BLE 중계 + UWB 태그 + SD 기록 + 링크 끊김 강제 DISARM) | 4.7.3, base + 고도 펜스 (`drone6_asis_20261120.param` 있음) | v3 |
 
 ## 부품별 상세
 
@@ -33,6 +33,8 @@
 
 2026-11-26 6호기 NUCLEO를 읽어 보니 위 표의 linkfs 브리지가 아니라 UWB 태그 거리 측정 펌웨어(DW3000 드라이버, `T2 LIBDECA DS-TWR role=initiator address=2`, 이미지 65,408바이트, 시작 주소 `0x3418cd65`)가 올라가 있었다. `firmware/nucleo/backup_drone6_20261126.bin`에 백업했고(커밋하지 않음) 브리지는 다시 쓰지 않았다. 같은 날 6호기는 배터리를 연결할 때 연기가 났다. FC는 USB 전원으로 IMU 두 개, 기압계가 정상이었다.
 
+2026-11-26 저녁 6호기 NUCLEO에 위 표의 linkfs 브리지(`b5674a42…`)를 다시 썼다. 다시 쓰기 전에는 NUCLEO LED2가 켜지고 LED1이 꺼져 있었고(전원을 다시 넣어도 같음), BLE로 붙어도 FC→노트북 하트비트 0개, FC `SERIAL4 RX` 0이었다. 쓰기 전 플래시는 개발 PC에 백업했다(커밋하지 않음). 쓰기는 STM32CubeProgrammer 2.24.0, 외부 로더 `MX25UM51245G_STM32N6570-NUCLEO.stldr`, `-hardRst -w … 0x70000000 -v`로 했고 `Download verified successfully`가 나왔다. 비행 구성으로 켜니 LED1이 깜빡이고 LED2는 꺼졌다. `gcs/tools/diag/n6_ro_check.py`로 BLE에 붙어 FC 하트비트 수신과 파라미터 응답(`MAV_GCS_SYSID`, `FS_GCS_ENABLE`, `FS_GCS_TIMEOUT`, `SERIAL4_BAUD`)을 확인했고, 그동안 FC `SERIAL4 RX`가 1,796바이트였다. 2026-11-27에 같은 점검을 다시 해도 양방향이 정상이었다.
+
 2026-11-27 2호기 NUCLEO(ST-LINK `002A0048…`)를 읽어 보니 기존 브리지(`n6_bridge_FSBL-trusted.bin`과 페이로드가 같음)가 올라가 있었다. 시험 PC에 백업하고(`nucleo_backup_drone2_20261127_133811.bin`, 커밋하지 않음) linkfs 브리지를 써서 검증(`-v`)했다. 비행 구성으로 부팅한 뒤 BLE 양방향(파라미터 5개 응답, FC SERIAL4 RX 1,369 B)을 두 번 확인했다.
 
 2026-11-26 4호기 NUCLEO에는 UWB 통신용 펌웨어(112,608바이트, 시작 주소 `0x34182c89`)가 올라가 있었다. 그 플래시를 `firmware/nucleo/backup_drone4_20261126.bin`에 백업하고(커밋하지 않음) 위 브리지를 다시 써서 검증(`-v`)했다.
@@ -48,7 +50,7 @@
 | 3호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone3.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`. 2026-11-26 `ATC_RAT_YAW_I` 0.018 → 0.03 직접 씀(이륙 때 요가 20~26° 밀려서), 읽어서 확인 | 2026-11-26 |
 | 4호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone4.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-23 |
 | 5호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone5.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`. 2026-11-25 고도 펜스(`FENCE_*`) 씀, 읽어서 확인 | 2026-11-25 |
-| 6호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` (47개 중 46개 일치). `MOT_THST_HOVER` 0.404 → 0.455로 직접 씀(2026-11-25 호버 로그 `ThO` 평균, 자동 학습이 안 됐음) | 파일 없음. FC 값 `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`는 아직 시험으로 확인하지 않음 | 2026-11-25 |
+| 6호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` (2026-11-27 53개 중 52개 일치, 다른 하나는 `MOT_THST_HOVER` 0.48). `MOT_THST_HOVER` 0.404 → 0.455로 직접 씀(2026-11-25 호버 로그 `ThO` 평균, 자동 학습이 안 됐음) | 파일 없음. FC 값 `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`는 아직 시험으로 확인하지 않음. 2026-11-27 고도 펜스(`FENCE_*` 5개) 씀, 읽어서 확인(이전 값 `FENCE_ENABLE 0`, `FENCE_TYPE 7`, `FENCE_ALT_MAX 100`, `FENCE_ACTION 1`, `FENCE_MARGIN 2`) | 2026-11-27 |
 
 2026-11-27 2호기 호버 시험(`n6_fly.py --alt 1.0 --hover 10`, 로그 `n6_fly_20261127_160420`): 이륙, 호버, 착륙, 시동 꺼짐까지 자동으로 끝났다. 0.91 m까지 7.3초. 호버 10초 동안 EKF 높이 평균 0.99 m(0.96~1.00), 거리센서 0.93~1.04 m. 롤이 평균 -1.7°(최대 2.6°) 기울어 있었다. 요는 호버 중 14°, 착륙 때 24° 돌아 착지 때 처음보다 34° 돌아가 있었다. 전압 15.7 V → 호버 끝 14.54 V. BLE 링크 지연 0.0~0.1초.
 
