@@ -22,7 +22,7 @@ import asyncio
 import datetime as _dt
 import signal
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 
 import n6_fly
 from n6_fly import BleLink, Console, KeyReader, N6Fly, HANGUL_KEYS, KILL_KEYS
@@ -57,7 +57,7 @@ class GroupFlight:
     def __init__(self, flies: List[N6Fly]):
         self.hover_seconds = flies[0].a.hover
         self.members = set(flies)
-        self.ready = set()
+        self.height_checks = {}
         self.land = asyncio.Event()
         self.tasks = {}
         for fly in flies:
@@ -65,9 +65,9 @@ class GroupFlight:
             fly._test_task = self.tasks[fly] = task
         self.monitor = asyncio.create_task(self.run())
 
-    async def hold(self, fly: N6Fly) -> None:
+    async def hold(self, fly: N6Fly, ready_to_hover: Callable[[], bool]) -> None:
         fly._phase = "다른 기체 대기"
-        self.ready.add(fly)
+        self.height_checks[fly] = ready_to_hover
         await self.land.wait()
 
     def withdraw(self, fly: N6Fly) -> None:
@@ -90,22 +90,31 @@ class GroupFlight:
         deadline = None
         try:
             while self.members:
+                ready = set()
                 for fly in tuple(self.members):
                     task = self.tasks[fly]
                     try:
                         if task.cancelled():
+                            if fly._cancel_reason == n6_fly.EMERGENCY_STOP_REASON:
+                                # xx was broadcast. End the trial while the key handlers finish DISARM.
+                                for member in tuple(self.members):
+                                    self.withdraw(member)
+                                return
                             raise n6_fly.TestFailed(fly._cancel_reason)
                         if task.done():
                             task.result()
                             self.members.remove(fly)
                         else:
                             fly._check_guards()
+                            check = self.height_checks.get(fly)
+                            if deadline is None and check is not None and check():
+                                ready.add(fly)
                     except Exception as exc:
                         await self.abort(fly, exc)
                         return
                 if not self.members:
                     break
-                if deadline is None and self.members <= self.ready:
+                if deadline is None and self.members == ready:
                     deadline = loop.time() + self.hover_seconds
                     for fly in self.members:
                         fly._phase = "호버"
@@ -189,11 +198,13 @@ async def amain(args: argparse.Namespace) -> None:
         await asyncio.gather(*runs)
     finally:
         disp.cancel()
-        if group:
-            await group.monitor
-        keys.restore()
-        for f in flies:
-            f.c.close()
+        try:
+            if group:
+                await group.monitor
+        finally:
+            keys.restore()
+            for f in flies:
+                f.c.close()
 
 
 def parse_args() -> argparse.Namespace:

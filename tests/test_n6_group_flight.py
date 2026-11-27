@@ -17,6 +17,8 @@ class SimFly(single.N6Fly):
         self.takeoff = None
         self.land_times = []
         self.nav_targets = []
+        self.force_disarms = 0
+        self.auto_disarm = True
         self.delay = 1
         self.online = True
         self.fs_checked = self.s.uplink_ok = True
@@ -26,7 +28,7 @@ class SimFly(single.N6Fly):
         now = asyncio.get_running_loop().time()
         if self.link.connected and self.online:
             self.s.last_rx = self.s.last_hb = self.s.rf_t = now
-            if self.land_times and now >= self.land_times[0] + 0.5:
+            if self.auto_disarm and self.land_times and now >= self.land_times[0] + 0.5:
                 self.s.armed = False
             self.s.rf_m = 0.02
             if self.takeoff and now >= self.takeoff + self.delay:
@@ -42,6 +44,10 @@ class SimFly(single.N6Fly):
         elif msg.command == single.mavlink2.MAV_CMD_DO_SET_MODE and msg.param2 == single.MODE_LAND:
             self.land_times.append(now)
             self.s.custom_mode = single.MODE_LAND
+        elif (msg.command == single.mavlink2.MAV_CMD_COMPONENT_ARM_DISARM
+              and msg.param1 == 0 and msg.param2 == single.FORCE_DISARM_MAGIC):
+            self.force_disarms += 1
+            self.s.armed = False
         for waiter in self._ack_waiters.get(msg.command, []):
             if not waiter.done():
                 waiter.set_result(single.ACCEPTED)
@@ -80,7 +86,8 @@ class Flights(unittest.IsolatedAsyncioTestCase):
 
         def key_reader(loop, queue):
             self.key = queue.put_nowait
-            return Mock()
+            self.keys = Mock()
+            return self.keys
 
         if solo:
             fly = make_fly(args, Mock(), SimpleNamespace(name="D-6", connected=True))
@@ -89,7 +96,7 @@ class Flights(unittest.IsolatedAsyncioTestCase):
             await fly._handle_key("y")
             return
         self.enterContext(patch.object(multi, "KeyReader", key_reader))
-        self.enterContext(patch.object(multi, "TaggedConsole", Mock()))
+        self.enterContext(patch.object(multi, "TaggedConsole", side_effect=lambda *_: Mock()))
         self.enterContext(patch.object(multi, "BleLink", lambda name, *_: SimpleNamespace(name=name, connected=True)))
         self.enterContext(patch.object(multi, "N6Fly", make_fly))
         self.enterContext(patch.object(self.loop, "add_signal_handler"))
@@ -181,6 +188,65 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         await self.advance(1)
         await fly._test_task
         self.assertAlmostEqual(fly.land_times[0] - fly.takeoff, 18, delta=0.25)
+
+    async def test_double_x_during_group_hover(self):
+        await self.start()
+        await self.advance(5)
+        self.key("x")
+        await self.advance(0.2)
+        self.assertTrue(all(f._phase == "호버" and not f.force_disarms for f in self.flies))
+        self.key("x")
+        await self.advance(12)
+        await self.finish()
+        self.assertEqual([f.force_disarms for f in self.flies], [3, 3])
+        self.assertEqual([f.land_times for f in self.flies], [[], []])
+
+    async def test_first_drone_descends_then_recovers(self):
+        await self.start()
+        await self.advance(2)
+        first, last = self.flies
+        first.delay = 6
+        await self.advance(3)
+        phases = [f._phase for f in self.flies]
+        await self.advance(12)
+        await self.finish()
+        self.assertNotIn("호버", phases)
+        self.assertEqual(first.land_times, last.land_times)
+        self.assertAlmostEqual(first.land_times[0] - first.takeoff, 16, delta=0.25)
+
+    async def test_first_drone_stays_below_threshold(self):
+        await self.start()
+        await self.advance(2)
+        self.flies[0].delay = 20
+        await self.advance(7)
+        counts = [len(f.land_times) for f in self.flies]
+        await self.finish()
+        self.assertEqual(counts, [3, 3])
+
+    async def test_disarm_timeout_reported_to_group(self):
+        await self.start()
+        await self.advance(2)
+        stuck = self.flies[1]
+        stuck.auto_disarm = False
+        await self.advance(44)
+        await self.finish()
+        self.assertIsInstance(stuck._test_task.exception(), single.TestFailed)
+        self.assertIn("30초", str(stuck._test_task.exception()))
+        self.assertTrue(any("공통 시험 중단" in str(c) for c in stuck.c.event.call_args_list))
+
+    async def test_monitor_error_restores_keyboard_and_closes_logs(self):
+        async def broken_monitor(group):
+            await asyncio.gather(*group.tasks.values(), return_exceptions=True)
+            raise RuntimeError("monitor error")
+
+        self.enterContext(patch.object(multi.GroupFlight, "run", broken_monitor))
+        await self.start()
+        await self.advance(2)
+        with self.assertRaisesRegex(RuntimeError, "monitor error"):
+            await self.finish()
+        self.keys.restore.assert_called_once()
+        for fly in self.flies:
+            fly.c.close.assert_called_once()
 
 
 if __name__ == "__main__":

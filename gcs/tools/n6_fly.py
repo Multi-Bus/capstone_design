@@ -91,6 +91,7 @@ FORCE_DISARM_MAGIC = 21196
 LAND_REPEAT = 3                # 킬: LAND 명령을 3번
 LAND_REPEAT_GAP_S = 0.1        #      0.1 s 간격
 DOUBLE_X_WINDOW_S = 1.0
+EMERGENCY_STOP_REASON = "비상 모터 정지"
 STREAM_INTERVALS = (           # (메시지 ID, Hz)
     (mavlink2.MAVLINK_MSG_ID_LOCAL_POSITION_NED, 5),   # 32
     (mavlink2.MAVLINK_MSG_ID_DISTANCE_SENSOR, 5),      # 132
@@ -984,7 +985,7 @@ class N6Fly:
             self.c.event("x: 1초 안에 x 를 한 번 더 누르면 모터 즉시 정지 (강제 DISARM). 공중이면 추락!")
             return
         self._last_x = 0.0
-        self._cancel_test("비상 모터 정지")
+        self._cancel_test(EMERGENCY_STOP_REASON)
         if not self.link.connected:
             self.c.event("비상 정지: BLE 끊김 상태라 못 보냄")
             return
@@ -1125,7 +1126,9 @@ class N6Fly:
                 return False
             await asyncio.sleep(0.05)
 
-    async def _takeoff_test(self, group_hover: Optional[Callable[["N6Fly"], Awaitable[None]]] = None) -> None:
+    async def _takeoff_test(
+        self, group_hover: Optional[Callable[["N6Fly", Callable[[], bool]], Awaitable[None]]] = None
+    ) -> None:
         a, s, c = self.a, self.s, self.c
         try:
             c.event(f"=== 이륙 시험 시작: {a.alt:.2f} m, 호버 {self._hover_txt()} (킬 = 스페이스/엔터/k) ===")
@@ -1190,8 +1193,11 @@ class N6Fly:
                     return -(s.lpn_z - z0) if z0 is not None else -s.lpn_z
                 return None
 
+            def at_height() -> bool:
+                return (climbed() or 0.0) >= target
+
             t0 = time.monotonic()
-            reached = await self._wait(lambda: (climbed() or 0.0) >= target, 8.0)
+            reached = await self._wait(at_height, 8.0)
             h = climbed()
             h_txt = f"{h:.2f} m" if h is not None else "알 수 없음"
             if reached:
@@ -1202,7 +1208,14 @@ class N6Fly:
                 c.event(f"    8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt}) — 그대로 호버 후 착륙")
 
             if group_hover:
-                await group_hover(self)
+                def ready_to_hover() -> bool:
+                    if at_height():
+                        return True
+                    if time.monotonic() >= t0 + 8.0:
+                        raise TestFailed("8초 판정 기한 경과 후 공통 호버 상승 기준 미충족")
+                    return False
+
+                await group_hover(self, ready_to_hover)
             else:
                 self._phase = "호버"
                 c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
@@ -1236,6 +1249,8 @@ class N6Fly:
                 c.event("=== 시험 완료: 착지, 시동 꺼짐 ===")
             else:
                 c.event("⚠ 30초가 지나도 시동 상태 — 높이 확인 후 스페이스(킬), 바닥이면 x x 로 정지")
+                if group_hover:
+                    raise TestFailed("LAND 후 30초 동안 시동 해제 미확인")
         except TestAborted as e:
             if e.link:
                 self._land_after_relink = True
