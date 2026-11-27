@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | v3 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v3 |
 | 5호기 | 미확인 | 미확인 | v3 |
-| 6호기 | UWB 태그 펌웨어 (2026-11-26 확인, 브리지 아님) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | v3 |
+| 6호기 | n6_flight_tag (`tagf-v2-lfs` id5: BLE 중계 + UWB 태그 + SD 기록 + 링크 끊김 강제 DISARM) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | v3 |
 
 ## 부품별 상세
 
@@ -23,7 +23,7 @@
 | 1호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
 | 2호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-27 |
 | 4호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-26 |
-| 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-25 |
+| 6호기 | `firmware/uwb/n6_flight_tag/build/n6_flight_tagf_v2lfs_id5-trusted.bin` (보드 ST-LINK SN `004700233335511035383531`) | `066127a31de4d6f0d136ca03b9f2f7fddc656e081d85701a133a4d4fade1ae24` | 2026-11-27 |
 
 `n6_bridge_linkfs_FSBL-trusted.bin`은 기존 브리지에 링크 끊김 강제 DISARM(`FSBL/Inc/link_failsafe.h`)을 더한 것이다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 강제 DISARM을 보낸다. 해시 `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654`. 노트북 하트비트가 5초 넘게 없고 FC가 LAND + 시동 ON을 9초 이어 가면 강제 DISARM한다. LAND 시간은 FC가 LAND로 바뀐 때부터 센다.
 
@@ -36,6 +36,8 @@
 2026-11-27 2호기 NUCLEO(ST-LINK `002A0048…`)를 읽어 보니 기존 브리지(`n6_bridge_FSBL-trusted.bin`과 페이로드가 같음)가 올라가 있었다. 시험 PC에 백업하고(`nucleo_backup_drone2_20261127_133811.bin`, 커밋하지 않음) linkfs 브리지를 써서 검증(`-v`)했다. 비행 구성으로 부팅한 뒤 BLE 양방향(파라미터 5개 응답, FC SERIAL4 RX 1,369 B)을 두 번 확인했다.
 
 2026-11-26 4호기 NUCLEO에는 UWB 통신용 펌웨어(112,608바이트, 시작 주소 `0x34182c89`)가 올라가 있었다. 그 플래시를 `firmware/nucleo/backup_drone4_20261126.bin`에 백업하고(커밋하지 않음) 위 브리지를 다시 써서 검증(`-v`)했다.
+
+2026-11-27 6호기 보드(SN `004700233335511035383531`)의 외부 플래시를 읽어 보니 팀원의 UWB 실측 펌웨어 `tagf-v3.1`(약 113 KB, 시작 주소 `0x34182c89`)이 올라가 있었다. 1 MB를 시험 PC에 백업하고(`nucleo_backup_drone6_20261127_flighttag_pre.bin`, 커밋하지 않음) 덮어써도 된다는 확인을 받은 뒤 `n6_flight_tagf_v2lfs_id5-trusted.bin`(PR #22 `feat/flight-tag`의 `firmware/uwb/n6_flight_tag/`)을 썼다. 쓰기 검증(`-v`)과 다시 읽기(앞 113,280바이트 일치)를 확인했다. RAM 실행은 하지 않았다(ELF가 커밋되지 않음). 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 FC USB만으로는 NUCLEO·XIAO가 켜지지 않았고(BLE 광고 없음, SERIAL4 RX 0), 배터리(16.7 V)를 연결하자 BLE 연결과 양방향(HEARTBEAT 수신, 파라미터 4개 응답, `LOCAL_POSITION_NED`·`ATTITUDE` 수신)을 두 번 확인했다. 연기는 없었다. SD 기록, UWB 측정, 모터·ESC 점검, 호버는 아직 하지 않았다.
 
 ### FC 파라미터 (`fc/`)
 
