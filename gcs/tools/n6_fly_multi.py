@@ -263,6 +263,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--names", required=True,
                    help="XIAO BLE 이름, 쉼표로 (예: N6-DRONE-1,N6-DRONE-4). 최대 4대")
     p.add_argument("--alt", type=float, default=0.6, help="이륙 높이 m (기본 0.6, 허용 0.3~2.0)")
+    p.add_argument("--floor-height", action="store_true",
+                   help="각 기체의 신선한 하향 거리로 도달 판정. 공통 호버 중 거리값 상실 시 전체 LAND")
     p.add_argument("--hover", type=float, default=10.0, help="호버 시간 s (기본 10, 허용 0~30)")
     p.add_argument("--no-arm", action="store_true", help="연결·텔레메트리만 (이륙 키 비활성)")
     p.add_argument("--scan-timeout", type=float, default=8.0, help="BLE 스캔 한 번의 시간 s")

@@ -867,7 +867,7 @@ class N6Fly:
             if name not in self.params:
                 problems.append(f"{name} 못 읽음")
             elif self.params[name] != expected:
-                problems.append(f"{name}={self.params[name]:g} (6호기 백업 {expected})")
+                problems.append(f"{name}={self.params[name]:g} (바닥 기준 시험 설정 {expected})")
         if sysid is None:
             problems.append("지상국 sysid(MAV_GCS_SYSID) 못 읽음 — t 를 다시 누르면 다시 읽음")
         elif int(sysid) != GCS_SYSID:
@@ -1159,6 +1159,8 @@ class N6Fly:
             raise TestAborted(f"모드가 {mode_name(s.custom_mode)}(으)로 바뀜")
         if self._guard_armed and not s.armed:
             raise TestAborted("시동이 꺼짐")
+        if self._floor_test and self._phase == "호버" and self._floor_height() is None:
+            raise TestFailed("호버 도중 하향 거리센서 무효/갱신 중단")
 
     async def _wait(self, cond: Callable[[], bool], timeout: float) -> bool:
         """cond 가 참이 될 때까지 기다림 (50 ms 마다 안전 조건도 검사)."""
@@ -1273,11 +1275,7 @@ class N6Fly:
             else:
                 self._phase = "호버"
                 c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
-                if self._floor_test:
-                    if await self._wait(lambda: self._floor_height() is None, a.hover):
-                        raise TestFailed("호버 도중 하향 거리센서 무효/갱신 중단")
-                else:
-                    await self._wait(lambda: False, a.hover)
+                await self._wait(lambda: False, a.hover)
             if getattr(a, "yaw", 0.0):
                 await self._yaw_test()
 

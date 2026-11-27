@@ -111,6 +111,9 @@ class Flights(unittest.IsolatedAsyncioTestCase):
 
         def make_fly(*params):
             fly = SimFly(*params)
+            if floor:
+                fly.s.rf_max_m = 8.0
+                fly.s.rf_floor_valid = True
             self.flies.append(fly)
             return fly
 
@@ -120,13 +123,11 @@ class Flights(unittest.IsolatedAsyncioTestCase):
             return self.keys
 
         if solo:
+            args.floor_height = floor
             fly = make_fly(args, Mock(), SimpleNamespace(name="D-6", connected=True))
             fly.delay = delay
             if floor:
-                fly._floor_test = True
                 fly.a.alt = 1.3
-                fly.s.rf_max_m = 8.0
-                fly.s.rf_floor_valid = True
             await fly._handle_key("t")
             await fly._handle_key("y")
             return
@@ -135,6 +136,9 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(multi, "BleLink", lambda name, *_: SimpleNamespace(name=name, connected=True)))
         self.enterContext(patch.object(multi, "N6Fly", make_fly))
         self.enterContext(patch.object(self.loop, "add_signal_handler"))
+        if floor:
+            with patch.object(sys, "argv", ["multi", "--names", "D-1,D-2,D-3", "--floor-height", "--alt", "1"]):
+                args = multi.parse_args()
         self.app = asyncio.create_task(multi.amain(args))
         await self.advance(0.05)
         self.flies[1].delay = delay
@@ -240,6 +244,31 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(fly.land_times), 1)
         self.assertAlmostEqual(fly.land_times[0] - fly.takeoff, 11, delta=0.25)
         self.assertFalse(fly.s.armed)
+
+    async def test_three_floor_targets_share_hover(self):
+        await self.start(floor=True)
+        for fly in self.flies:
+            tick = fly.tick
+            def floor_samples(fly=fly, tick=tick):
+                tick()
+                fly.s.rf_m = 0.92 if fly.s.rf_m > 1 else 0.15
+            fly.tick = floor_samples
+        await self.advance(15.5)
+        land_times = [f.land_times[:] for f in self.flies]
+        await self.finish()
+        self.assertEqual(len(land_times[0]), 1)
+        self.assertEqual(land_times, [land_times[0]] * 3)
+        self.assertAlmostEqual(land_times[0][0] - self.flies[1].takeoff, 14, delta=0.25)
+
+    async def test_three_floor_hover_one_sensor_stale(self):
+        await self.start(floor=True)
+        await self.advance(5)
+        self.assertTrue(all(f._phase == "호버" for f in self.flies))
+        fly = self.flies[2]
+        fly.tick = lambda: setattr(fly.s, "last_rx", self.now)
+        await self.advance(1)
+        self.assertEqual([len(f.land_times) for f in self.flies], [3, 3, 3])
+        await self.finish()
 
     async def test_floor_rejects_ekf_only_arrival(self):
         await self.start(solo=True, floor=True)
