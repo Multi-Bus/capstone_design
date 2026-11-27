@@ -12,6 +12,7 @@
 | `results/2026-11-24_3to1_laser_check/` | 다른 배치에서 태그–앵커 거리를 레이저 거리와 비교 (앵커 이름 = 펌웨어 ID) | 반복성 0.5 cm, A3 +2 cm, A1 −7 cm, A2 −13~−21 cm |
 | `results/2026-11-24_3to1_A2_calibration/` | A2 거리 보정 전후 비교 (레이저 기준, 두 지점) | A2 −12~−14 cm → 0~+0.2 cm |
 | `results/2026-11-24_3to1_A1_calibration/` | A1 보정 후 지점 2·4 확인, 지점 3에서 태그 높이 12 cm 차이 비교 | 보정한 A1·A2는 지점 2·4에서 2 cm 이내, 지점 3 −6.5~+2.4 cm |
+| `results/2026-11-27_drone3_hover_A/` | 3호기 A 지점 1.3 m 목표 호버 20 s × 4번의 SD 거리 기록을 줄자 거리와 비교, 앵커 좌표계 3D 그림(`anchor_frame_3d.html`) | 요 안정 비행에서 A1·A2 sd 3~4 cm, 앵커 3개 위치 A와 0.04~0.11 m. 앵커 3 두 묶음(0.5 m) 갈림 1번 |
 | `n6_flight_tag/` | 비행용 NUCLEO 펌웨어: BLE 중계 + UWB 태그(프레임 방식) + SD 기록 + 링크 끊김 강제 DISARM. 팀 Dropbox 태그 v2에 `n6_bridge`의 `link_failsafe.h`를 붙임. 설명은 그 폴더 `README_KO.md` | 4호기에 올림, 1.3 m 호버 (2026-11-27) |
 | (예정) N6 UWB 프로젝트 | N6 CubeIDE 프로젝트: Qorvo DW3000 드라이버 포팅, SPI + IRQ, DS-TWR | U0. 드라이버는 Qorvo에서 받아야 한다 |
 
