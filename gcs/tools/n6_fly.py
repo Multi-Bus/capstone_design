@@ -106,6 +106,7 @@ STREAM_INTERVALS = (           # (메시지 ID, Hz)
 )
 RANGEFINDER_DOWN = mavlink2.MAV_SENSOR_ROTATION_PITCH_270  # 25 (RNGFND1_ORIENT)
 # Verified D6 floor-test configuration. Read-only checks before a trial.
+FLOOR_STALE_S = 1.0           # --floor-height: 하향 거리값이 이보다 오래 안 오면 실패. 실측 수신 간격 0.4~0.6 s라 0.5 s는 한 번 빠져도 실패해서 늘림 (2026-11-27 6호기)
 FLOOR_PARAMS = {"AHRS_EKF_TYPE": 3, "EK3_SRC1_POSZ": 2, "EK3_SRC1_VELXY": 5,
                 "WP_RFND_USE": 1, "GUID_OPTIONS": 0, "RNGFND1_ORIENT": RANGEFINDER_DOWN}
 YAW_RATE_DPS = 30.0            # 제자리 회전 속도 (CONDITION_YAW param2)
@@ -132,7 +133,7 @@ MANUAL_KEYS = {"UP": ("앞", 1, 0), "w": ("앞", 1, 0), "DOWN": ("뒤", -1, 0), 
                "LEFT": ("왼쪽", 0, -1), "a": ("왼쪽", 0, -1), "RIGHT": ("오른쪽", 0, 1), "d": ("오른쪽", 0, 1),
                "r": ("시작점", None, None)}
 WIN_ARROWS = {"H": "UP", "P": "DOWN", "K": "LEFT", "M": "RIGHT"}
-MANUAL_MAX_M = 1.0             # --manual: 시작점에서 이보다 먼 목표는 거부 (FC 추정 위치 기준)
+MANUAL_MAX_M = 3.0             # --manual: 시작점에서 이보다 먼 목표는 거부 (FC 추정 위치 기준)
 MANUAL_SETTLE_S = 1.0          # --manual: 도달 뒤 이만큼 멈춘 다음에야 다음 키를 받음
 MANUAL_ABORT_M = 0.5           # --manual: 도달 시간 안에 목표와 이보다 멀면 LAND
 
@@ -257,11 +258,7 @@ class Console:
         self._status = text
         self._to_log(f"[상태] {text}")
         if self._live:
-            # 좁은 터미널에서는 전체 상태를 줄바꿈해 자세와 전압도 볼 수 있게 한다.
-            sys.stdout.write("\r\x1b[2K" + text)
-            if self._status_line() != text:
-                sys.stdout.write("\n")
-                self._status = ""
+            sys.stdout.write("\r\x1b[2K" + self._status_line())
         else:
             sys.stdout.write(f"{self._stamp(False)} [상태] {text}\n")
         sys.stdout.flush()
@@ -948,7 +945,7 @@ class N6Fly:
 
     def _floor_height(self) -> Optional[float]:
         s = self.s
-        if (s.rf_floor_valid and s.rf_t > 0 and 0 <= time.monotonic() - s.rf_t < 0.5
+        if (s.rf_floor_valid and s.rf_t > 0 and 0 <= time.monotonic() - s.rf_t < FLOOR_STALE_S
                 and self.a.alt < s.rf_max_m):
             return s.rf_m
         return None
@@ -1545,7 +1542,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--move-hold", type=float, default=3.0, help="이동마다 멈춰서 위치를 재는 시간 s (기본 3)")
     p.add_argument("--manual", action="store_true",
                    help="호버 뒤 방향키(또는 w/a/s/d)로 한 칸씩 이동, r = 시작점. 이동 중 누른 키는 무시. 스페이스로 착륙")
-    p.add_argument("--step", type=float, default=0.2, help="--manual 한 칸 m (기본 0.2, 허용 0.1~0.3)")
+    p.add_argument("--step", type=float, default=0.2, help="--manual 한 칸 m (기본 0.2, 허용 0.1~0.5)")
     p.add_argument("--step-fb", type=float, default=None,
                    help="--manual 앞뒤 한 칸 m (주지 않으면 --step 과 같음, 허용 0.1~0.5). 좌우는 --step")
     p.add_argument("--no-arm", action="store_true", help="연결·텔레메트리만 (이륙 키 비활성)")
@@ -1561,8 +1558,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         p.error("--move 는 0.2 ~ 0.5 m 범위로 (0 = 이동 안 함)")
     if not 0.5 <= a.move_hold <= 10.0:
         p.error("--move-hold 는 0.5 ~ 10 s 범위로")
-    if not 0.1 <= a.step <= 0.3:
-        p.error("--step 은 0.1 ~ 0.3 m 범위로")
+    if not 0.1 <= a.step <= 0.5:
+        p.error("--step 은 0.1 ~ 0.5 m 범위로")
     if a.step_fb is not None and not 0.1 <= a.step_fb <= 0.5:
         p.error("--step-fb 는 0.1 ~ 0.5 m 범위로")
     if a.manual and (a.hold or a.move or a.yaw):
