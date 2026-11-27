@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UWB 앵커 좌표계</title>
+<style>
+:root { --bg:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --grid:#e1e0d9; --base:#b4b2a9; --card:#f1efe8; }
+@media (prefers-color-scheme: dark) { :root { --bg:#151515; --ink:#f0efec; --ink2:#c3c2b7; --grid:#2c2c2a; --base:#5f5e5a; --card:#262624; } }
+body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font-family:system-ui, sans-serif; }
+h1 { font-size:18px; font-weight:500; margin:0 0 4px; }
+p { font-size:13px; color:var(--ink2); margin:0 0 12px; line-height:1.6; }
+.legend { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--ink2); margin-bottom:8px; }
+.legend span { display:flex; align-items:center; gap:5px; }
+.sw { width:10px; height:10px; border-radius:2px; display:inline-block; }
+#plot { width:100%; height:520px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-top:12px; }
+.card { background:var(--card); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--ink2); }
+.card b { display:block; font-size:16px; font-weight:500; color:var(--ink); margin-top:2px; }
+</style>
+</head>
+<body>
+<h1>UWB 앵커 좌표계와 A 지점 (2026-11-27, 3호기)</h1>
+<p>앵커1 원점, 앵커2 −x, 앵커3 +y, 앵커 높이 모두 2.6 m. 앵커 사이 줄자 거리 1–2 9.98 m, 2–3 6.34 m, 1–3 7.41 m.
+A 지점은 높이 1.3 m에서 줄자로 잰 거리(7.44 / 3.00 / 5.12 m)로 푼 점이다. 초록·보라는 호버 20 s 동안 앵커 3개로 계산한 위치의 중앙값.</p>
+<div class="legend">
+<span><i class="sw" style="background:#2a78d6"></i>앵커</span>
+<span><i class="sw" style="background:#eb6834;border-radius:50%"></i>A 지점 (줄자)</span>
+<span><i class="sw" style="background:#1baf7a;transform:rotate(45deg)"></i>호버 20:49 (UWB)</span>
+<span><i class="sw" style="background:#6250d6;transform:rotate(45deg)"></i>호버 23:26 (UWB)</span>
+</div>
+<div id="plot"></div>
+<div class="cards">
+<div class="card">A 지점 (줄자, z=1.3)<b>(−7.30, 0.01)</b></div>
+<div class="card">호버 20:49, A와 0.11 m<b>(−7.22, 0.08)</b></div>
+<div class="card">호버 23:26, A와 0.04 m<b>(−7.29, 0.04)</b></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<script>
+const css = getComputedStyle(document.documentElement);
+const ink = css.getPropertyValue('--ink2').trim(), grid = css.getPropertyValue('--grid').trim(), base = css.getPropertyValue('--base').trim();
+const A1=[0,0,2.6], A2=[-9.98,0,2.6], A3=[-5.727,4.702,2.6], P=[-7.303,0.007,1.3];
+const H1=[-7.219,0.081,1.21], H4=[-7.285,0.038,1.21];
+const an=[A1,A2,A3], refd=[7.44,3.00,5.12];
+const tr=[];
+tr.push({type:'scatter3d',mode:'lines',x:[A1[0],A2[0],A3[0],A1[0]],y:[A1[1],A2[1],A3[1],A1[1]],z:[2.6,2.6,2.6,2.6],line:{color:base,width:3,dash:'dash'},hoverinfo:'skip',showlegend:false});
+tr.push({type:'scatter3d',mode:'lines',x:[1,-11,-11,1,1],y:[-1.5,-1.5,6,6,-1.5],z:[0,0,0,0,0],line:{color:base,width:2},hoverinfo:'skip',showlegend:false});
+an.forEach((a,i)=>{
+  tr.push({type:'scatter3d',mode:'lines',x:[a[0],a[0]],y:[a[1],a[1]],z:[0,a[2]],line:{color:base,width:2},hoverinfo:'skip',showlegend:false});
+  tr.push({type:'scatter3d',mode:'lines',x:[P[0],a[0]],y:[P[1],a[1]],z:[P[2],a[2]],line:{color:'#eb6834',width:3},hovertext:`앵커${i+1}: 줄자 ${refd[i].toFixed(2)} m`,hoverinfo:'text',showlegend:false});
+});
+tr.push({type:'scatter3d',mode:'markers+text',x:an.map(a=>a[0]),y:an.map(a=>a[1]),z:an.map(a=>a[2]),text:['앵커1 (0, 0)','앵커2 (−9.98, 0)','앵커3 (−5.73, 4.70)'],textposition:'top center',textfont:{color:ink,size:12},marker:{size:7,color:'#2a78d6',symbol:'square'},hovertemplate:'%{text}<br>z = 2.6 m<extra></extra>',showlegend:false});
+tr.push({type:'scatter3d',mode:'markers+text',x:[P[0]],y:[P[1]],z:[P[2]],text:['A'],textposition:'bottom center',textfont:{color:ink,size:13},marker:{size:7,color:'#eb6834'},hovertemplate:'A 지점 (−7.30, 0.01, 1.30)<extra></extra>',showlegend:false});
+tr.push({type:'scatter3d',mode:'markers',x:[H1[0]],y:[H1[1]],z:[H1[2]],marker:{size:6,color:'#1baf7a',symbol:'diamond'},hovertemplate:'호버 20:49 UWB 중앙값 (−7.22, 0.08)<extra></extra>',showlegend:false});
+tr.push({type:'scatter3d',mode:'markers',x:[H4[0]],y:[H4[1]],z:[H4[2]],marker:{size:6,color:'#6250d6',symbol:'diamond'},hovertemplate:'호버 23:26 UWB 중앙값 (−7.29, 0.04)<extra></extra>',showlegend:false});
+tr.push({type:'scatter3d',mode:'lines',x:[P[0],P[0]],y:[P[1],P[1]],z:[0,P[2]],line:{color:'#eb6834',width:2,dash:'dot'},hoverinfo:'skip',showlegend:false});
+const ax=t=>({title:{text:t,font:{color:ink,size:12}},tickfont:{color:ink,size:11},gridcolor:grid,zerolinecolor:base,showbackground:false});
+Plotly.newPlot('plot',tr,{margin:{l:0,r:0,t:0,b:0},paper_bgcolor:'rgba(0,0,0,0)',
+  scene:{xaxis:ax('x (m)'),yaxis:ax('y (m)'),zaxis:Object.assign(ax('z (m)'),{range:[0,3]}),aspectmode:'data',camera:{eye:{x:0.3,y:-1.7,z:0.9}}}},
+  {displaylogo:false,responsive:true});
+</script>
+</body>
+</html>
