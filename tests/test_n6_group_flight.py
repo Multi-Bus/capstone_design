@@ -266,7 +266,7 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(f._phase == "호버" for f in self.flies))
         fly = self.flies[2]
         fly.tick = lambda: setattr(fly.s, "last_rx", self.now)
-        await self.advance(1)
+        await self.advance(1.5)
         self.assertEqual([len(f.land_times) for f in self.flies], [3, 3, 3])
         await self.finish()
 
@@ -294,7 +294,7 @@ class Flights(unittest.IsolatedAsyncioTestCase):
         await self.advance(1)
         self.assertEqual(fly._phase, "호버")
         fly.tick = lambda: setattr(fly.s, "last_rx", self.now)
-        await self.advance(1)
+        await self.advance(1.5)
         self.assertEqual(len(fly.land_times), 3)
 
     async def test_floor_rejects_invalid_range_frames(self):

@@ -106,6 +106,7 @@ STREAM_INTERVALS = (           # (메시지 ID, Hz)
 )
 RANGEFINDER_DOWN = mavlink2.MAV_SENSOR_ROTATION_PITCH_270  # 25 (RNGFND1_ORIENT)
 # Verified D6 floor-test configuration. Read-only checks before a trial.
+FLOOR_STALE_S = 1.0           # --floor-height: 하향 거리값이 이보다 오래 안 오면 실패. 실측 수신 간격 0.4~0.6 s라 0.5 s는 한 번 빠져도 실패해서 늘림 (2026-11-27 6호기)
 FLOOR_PARAMS = {"AHRS_EKF_TYPE": 3, "EK3_SRC1_POSZ": 2, "EK3_SRC1_VELXY": 5,
                 "WP_RFND_USE": 1, "GUID_OPTIONS": 0, "RNGFND1_ORIENT": RANGEFINDER_DOWN}
 YAW_RATE_DPS = 30.0            # 제자리 회전 속도 (CONDITION_YAW param2)
@@ -257,11 +258,7 @@ class Console:
         self._status = text
         self._to_log(f"[상태] {text}")
         if self._live:
-            # 좁은 터미널에서는 전체 상태를 줄바꿈해 자세와 전압도 볼 수 있게 한다.
-            sys.stdout.write("\r\x1b[2K" + text)
-            if self._status_line() != text:
-                sys.stdout.write("\n")
-                self._status = ""
+            sys.stdout.write("\r\x1b[2K" + self._status_line())
         else:
             sys.stdout.write(f"{self._stamp(False)} [상태] {text}\n")
         sys.stdout.flush()
@@ -948,7 +945,7 @@ class N6Fly:
 
     def _floor_height(self) -> Optional[float]:
         s = self.s
-        if (s.rf_floor_valid and s.rf_t > 0 and 0 <= time.monotonic() - s.rf_t < 0.5
+        if (s.rf_floor_valid and s.rf_t > 0 and 0 <= time.monotonic() - s.rf_t < FLOOR_STALE_S
                 and self.a.alt < s.rf_max_m):
             return s.rf_m
         return None
