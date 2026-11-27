@@ -41,6 +41,9 @@ class FakeFC:
         self.mode = 0
         self.armed = False
         self.z = 0.0
+        self.x = self.y = 0.0
+        self.xy_goal = None
+        self.pos_targets = []  # 받은 SET_POSITION_TARGET_LOCAL_NED (frame, mask, x, y, z, yaw)
         self.target = None
         self.yaw = 40.0        # 도
         self.yaw_goal = None
@@ -106,6 +109,11 @@ class FakeFC:
             if pid in self.params:
                 self.out(self.tx.param_value_encode(pid.encode(), float(self.params[pid]), 2, 1000, 0))
             return
+        if t == "SET_POSITION_TARGET_LOCAL_NED":
+            self.pos_targets.append((msg.coordinate_frame, msg.type_mask, msg.x, msg.y, msg.z, msg.yaw))
+            if self.armed and self.mode == 4 and self.z < -0.05:
+                self.xy_goal = (msg.x, msg.y)
+            return
         if t != "COMMAND_LONG":
             self.log.append((now, t, None))
             return
@@ -170,6 +178,15 @@ class FakeFC:
                         self.armed = False
                         self.land_t = None
                         self.out(self.tx.statustext_encode(6, b"Land complete, disarming"))
+            if self.xy_goal is not None and self.armed and self.mode == 4:
+                dx, dy = self.xy_goal[0] - self.x, self.xy_goal[1] - self.y
+                d = math.hypot(dx, dy)
+                stepv = 0.5 * dt
+                if d <= stepv:
+                    self.x, self.y = self.xy_goal
+                else:
+                    self.x += dx / d * stepv
+                    self.y += dy / d * stepv
             if self.yaw_goal is not None:
                 err = (self.yaw_goal - self.yaw + 180.0) % 360.0 - 180.0
                 stepv = self.yaw_rate * dt
@@ -201,7 +218,7 @@ class FakeFC:
             if iv.get(32, 0) > 0 and now - t_lpn >= iv[32] / 1e6:
                 t_lpn = now
                 dip = self.baro_dip if (self.armed and self.z > -0.05) else 0.0   # 바닥에서 모터 바람 -> EKF 높이 떨어짐
-                self.out(self.tx.local_position_ned_encode(0, 0, 0, self.z + dip, 0, 0, 0))
+                self.out(self.tx.local_position_ned_encode(0, self.x, self.y, self.z + dip, 0, 0, 0))
             if iv.get(132, 0) > 0 and now - t_ds >= iv[132] / 1e6:
                 t_ds = now
                 self.out(self.tx.distance_sensor_encode(0, 1, 800, int(-self.z * 100), 10, 1, 25, 0))
@@ -730,11 +747,72 @@ async def s16_hold():
         await sc.wait(lambda: not sc.fc.armed, 10)
 
 
+async def s17_move():
+    """--move 0.3: 호버 뒤 앞·뒤·오른쪽·왼쪽 0.3 m 이동과 복귀, 방위각 고정, 시작점으로 돌아옴."""
+    (OUT / "s17_move.log").unlink(missing_ok=True)
+    async with Scenario("s17_move", move=0.3, move_hold=0.6, hover=0.3) as sc:
+        fc = sc.fc
+        fc.x, fc.y = 1.0, -2.0         # 원점이 아닌 곳에서 시작
+        await sc.key("t")
+        await sc.key("y")
+        await sc.wait(lambda: sc.app._test_task is not None and sc.app._test_task.done(), 50)
+        txt = sc.text()
+        check("s17 이동 8번 모두 도달", txt.count("만에 도달 | 정지") == 8, str(txt.count("만에 도달 | 정지")))
+        check("s17 시작점으로 복귀", math.hypot(fc.x - 1.0, fc.y + 2.0) < 0.05, f"{fc.x:.2f}, {fc.y:.2f}")
+        psi = math.radians(40.0)
+        far = max(fc.pos_targets, key=lambda p: math.hypot(p[2] - 1.0, p[3] + 2.0))
+        check("s17 이동 거리 0.3 m", abs(math.hypot(far[2] - 1.0, far[3] + 2.0) - 0.3) < 1e-3)
+        first = fc.pos_targets[0]   # 앞: 방위각 40° 방향
+        check("s17 앞 = 기체 방위각 방향", abs(first[2] - (1.0 + 0.3 * math.cos(psi))) < 0.01
+              and abs(first[3] - (-2.0 + 0.3 * math.sin(psi))) < 0.01, str(first))
+        check("s17 프레임 LOCAL_NED, 방위각 고정",
+              all(p[0] == m.MAV_FRAME_LOCAL_NED and p[1] == n6.MOVE_TYPE_MASK and abs(p[5] - psi) < 0.05
+                  for p in fc.pos_targets), str(fc.pos_targets[:2]))
+        check("s17 높이 유지 목표", all(abs(p[4] + 0.8) < 0.05 for p in fc.pos_targets), str(first[4]))
+        check("s17 시험 완료", "시험 완료" in txt and not fc.armed)
+
+
+async def s18_manual():
+    """--manual: 키 하나에 한 칸, 이동 중 누른 키는 버림, 1 m 넘는 목표 거부, r = 시작점, 스페이스로 착륙."""
+    (OUT / "s18_manual.log").unlink(missing_ok=True)
+    async with Scenario("s18_manual", manual=True, step=0.3, hover=0.3) as sc:
+        fc = sc.fc
+        fc.x, fc.y = 1.0, -2.0
+        psi = math.radians(40.0)
+        await sc.key("t")
+        await sc.key("y")
+        await sc.wait(lambda: sc.app._phase == "수동대기", 20)
+        await sc.key("UP")
+        for k in ("UP", "w", "RIGHT"):          # 이동 중 연타 -> 모두 버려야 함
+            await asyncio.sleep(0.05)
+            await sc.key(k)
+        await sc.wait(lambda: "앞 → 앞 +0.30" in sc.text(), 10)
+        await sc.wait(lambda: sc.app._phase == "수동대기", 5)
+        txt = sc.text()
+        check("s18 이동 중 키 무시", txt.count("이동 중 — 입력 무시") == 3, str(txt.count("이동 중 — 입력 무시")))
+        check("s18 한 칸만 감", math.hypot(fc.x - (1.0 + 0.3 * math.cos(psi)), fc.y - (-2.0 + 0.3 * math.sin(psi))) < 0.12,
+              f"{fc.x:.2f}, {fc.y:.2f}")
+        for _ in range(3):                       # 앞 0.6, 0.9, 1.2(거부)
+            await sc.key("w")
+            await sc.wait(lambda: sc.app._phase == "수동대기" and not sc.app._manual_busy, 10)
+            await asyncio.sleep(0.1)
+        check("s18 1 m 넘는 목표 거부", "1.20 m 라서 거부" in sc.text(), "")
+        far = max(fc.pos_targets, key=lambda p: math.hypot(p[2] - 1.0, p[3] + 2.0))
+        check("s18 최대 0.9 m", abs(math.hypot(far[2] - 1.0, far[3] + 2.0) - 0.9) < 1e-3)
+        await sc.key("r")
+        await sc.wait(lambda: "시작점 → 앞 +0.00" in sc.text(), 10)
+        check("s18 r 시작점 복귀", math.hypot(fc.x - 1.0, fc.y + 2.0) < 0.12, f"{fc.x:.2f}, {fc.y:.2f}")
+        check("s18 방위각·높이 고정", all(abs(p[5] - psi) < 0.05 and abs(p[4] + 0.8) < 0.05 for p in fc.pos_targets))
+        await sc.key(" ")
+        await sc.wait(lambda: not fc.armed, 20)
+        check("s18 스페이스로 착륙", not fc.armed and not sc.app._manual_on)
+
+
 async def main():
     random.seed(1)
     only = sys.argv[1:]
     for fn in (s11_blelink_disconnect, s10_ble_fragment_lock, s1_normal, s2_kill, s3_mode_change, s4_short_drop, s4b_long_drop,
-               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm, s15_yaw, s16_hold):
+               s4c_nucleo_reset, s5_double_x, s6_arm_reject, s7_quit_armed, s8_bad_params, s8b_timeout_not_3, s9_no_arm, s12_param_lost_then_reread, s13_heartbeat_loss, s14_baro_dip_at_arm, s15_yaw, s16_hold, s17_move, s18_manual):
         if only and fn.__name__ not in only:
             continue
         try:
