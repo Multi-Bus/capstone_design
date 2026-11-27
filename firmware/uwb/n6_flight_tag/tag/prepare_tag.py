@@ -9,6 +9,7 @@
                                                                     # 같은 것 + SD 카드 기록 (캐리어 보드의 microSD)
     python prepare_tag.py --fsbl-copy <copy>/FSBL --packets f --opt O2 --tag-id 3 --sd --flight --st-package <...>
                                                                     # 비행용: + BLE 중계, 비행 제어기 연결, 대본
+    python prepare_tag.py ... --flight --app-link                   # 같은 것을 SD 로더용으로 (AXISRAM1 에서 돈다)
 
 그다음 STM32CubeIDE 로 그 FSBL 프로젝트의 Debug 구성을 빌드한다.
 """
@@ -22,6 +23,8 @@ import shutil
 
 OPT_OPTION = "com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.optimization.level"
 OPT_VALUES = {"O0": "o0", "O1": "o1", "O2": "o2", "O3": "o3", "Os": "os", "Og": "og"}
+APP_LINK_ROM = ("ORIGIN = 0x34180400,   LENGTH = 255K", "ORIGIN = 0x34000400,   LENGTH = 511K")
+HARDFAULT_MARK = "/* USER CODE END HardFault_IRQn 0 */"
 INTERVAL_MAX = 2900  # frames.h 의 UWB7_INTERVAL_MAX
 TIME_MIN = 200       # frames.h 의 UWB7_TIME_MIN
 
@@ -42,6 +45,21 @@ def set_optimization(fsbl: Path, level: str) -> None:
     cproject.write_bytes((text[:match.start()] + option + text[match.end():]).encode("utf-8"))
 
 
+def set_app_link(fsbl: Path) -> None:
+    """SD 로더(firmware/uwb/n6_sd_loader)가 올릴 펌웨어로 만든다: 코드를 AXISRAM1(0x34000400) 에 링크하고
+    (RAM 자리는 그대로), HardFault 때 멈추지 않고 리셋하게 한다(로더가 다음 부팅을 기본 펌웨어로 한다)."""
+    linker = fsbl / "STM32N657X0HXQ_AXISRAM2_fsbl.ld"
+    text = linker.read_bytes().decode("utf-8")
+    if text.count(APP_LINK_ROM[0]) != 1:
+        raise ValueError(f"{linker.name}: expected the FSBL ROM region {APP_LINK_ROM[0]!r}")
+    linker.write_bytes(text.replace(APP_LINK_ROM[0], APP_LINK_ROM[1]).encode("utf-8"))
+    handlers = fsbl / "Core" / "Src" / "stm32n6xx_it.c"
+    text = handlers.read_bytes().decode("utf-8")
+    if text.count(HARDFAULT_MARK) != 1:
+        raise ValueError(f"{handlers.name}: expected one HardFault USER CODE END marker")
+    handlers.write_bytes(text.replace(HARDFAULT_MARK, HARDFAULT_MARK + " NVIC_SystemReset();").encode("utf-8"))
+
+
 def check_timing(slot: int, response: int, final: int) -> None:
     if min(slot, response, final) < TIME_MIN:
         raise ValueError(f"S, D1, D2 must be at least {TIME_MIN} us")
@@ -52,7 +70,7 @@ def check_timing(slot: int, response: int, final: int) -> None:
 def prepare(fsbl: Path, antenna_delay: int, packets: str = "9", opt: str = "", slot: int = 600,
             response: int = 900, final: int = 700, sweep: bool = False, sweep_bundles: int = 300,
             tag_id: int = 0, tags: int = 6, sd: bool = False, st_package: Path | None = None,
-            frame_us: int = 20000, flight: bool = False) -> None:
+            frame_us: int = 20000, flight: bool = False, app_link: bool = False) -> None:
     packets = str(packets)
     if not 0 <= antenna_delay <= 65535:
         raise ValueError("antenna delay must be a uint16 in DW time units")
@@ -87,6 +105,8 @@ def prepare(fsbl: Path, antenna_delay: int, packets: str = "9", opt: str = "", s
         raise ValueError("--sd needs --packets f and --st-package")
     if flight and not sd:
         raise ValueError("--flight needs --sd (기록이 안 되면 대본을 시작하지 않는다)")
+    if app_link:
+        set_app_link(fsbl)
     if packets == "f":
         frame_config.write_text(f"#define TAGF_ID {tag_id}\n#define UWBF_TAGS {tags}\n"
                                 f"#define TAGF_BUILD_OPT \"{opt or 'project'}\"\n"
@@ -135,6 +155,8 @@ if __name__ == "__main__":
     parser.add_argument("--frame-us", type=int, default=20000, help="프레임 방식: 프레임 길이 (SD 쓰기 구간을 정하는 데 씀)")
     parser.add_argument("--flight", action="store_true",
                         help="프레임 방식: 비행용 (BLE 중계 + 비행 제어기 연결 + 대본). --sd 가 있어야 함")
+    parser.add_argument("--app-link", action="store_true",
+                        help="SD 로더용: 코드를 AXISRAM1(0x34000400) 에 링크하고 HardFault 때 리셋")
     parser.add_argument("--opt", default="", choices=["", *OPT_VALUES],
                         help="set the Debug configuration's optimization level (default: leave the project as is)")
     parser.add_argument("--slot-us", type=int, default=600, help="7패킷: S")
@@ -146,6 +168,6 @@ if __name__ == "__main__":
     try:
         prepare(args.fsbl_copy, args.antenna_delay, args.packets, args.opt, args.slot_us, args.resp_delay_us,
                 args.final_delay_us, args.sweep, args.sweep_bundles, args.tag_id, args.tags, args.sd, args.st_package,
-                args.frame_us, args.flight)
+                args.frame_us, args.flight, args.app_link)
     except (OSError, ValueError) as error:
         parser.exit(2, f"{error}\n")

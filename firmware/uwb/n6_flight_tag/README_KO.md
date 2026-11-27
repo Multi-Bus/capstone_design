@@ -9,6 +9,26 @@ NUCLEO-N657X0-Q(+ DWM3000EVB)에 올리는 비행용 펌웨어다. `n6_bridge`�
 - 시작 줄의 펌웨어 이름은 `fw=tagf-v2-lfs`다.
 - 팀원이 2026-11-26 실측에 쓴 `tagf-v3.1`의 소스는 없어서 v2를 바탕으로 했다. v2와 v3.1의 차이는 모른다.
 
+## 기록 늘림 (`tagf-v2-log`, 2026-11-28, `feat/sd-loader`)
+
+필터·군집 제어 분석에 쓰려고 SD 기록(`UWBLOG.BIN`)에 줄을 더했다. 노트북으로 가는 BLE 양은 그대로다(보드가 줄여서 넘김).
+`build/`의 `tagf-v2-lfs` 이미지에는 없고, `firmware/uwb/n6_sd_loader/build/`(SD 로더용 `--app-link` 빌드)에 들어 있다.
+
+| 줄 | 빈도 | 칸 (프레임 번호 뒤) |
+| --- | --- | --- |
+| `C` | FC 위치마다 (50 Hz 요청) | 지금 20칸 + 끝에 `위치 FC ms`, `자세 FC ms` (FC의 `time_boot_ms`, DataFlash 로그와 맞출 때) |
+| `A` | 20 Hz | 거리센서: `FC ms, 거리 cm, 최소 cm, 최대 cm, 방향(25=아래), 신호 품질` |
+| `O` | 20 Hz | 광류: `FC ms, flow_x, flow_y(0.1 px), 보정 속도 x, y(mm/s), 높이 mm, 품질, 각속도 x, y(mrad/s)` |
+| `B` | 2 Hz | 배터리: `mV, 전류 cA, 남은 %, 부하(0.1 %), 통신 손실(0.01 %)` |
+| `G` | 노트북이 보낼 때 | 노트북 목표(`SET_POSITION_TARGET_LOCAL_NED`): `보낸 sysid, FC ms, 기준(1 LOCAL_NED, 8 BODY_NED), 무시 표시(16진), x, y, z(mm), vx, vy, vz(mm/s), 요(0.01°), 요 속도(0.01°/s)` |
+| `M` | 노트북이 보낼 때 | 노트북 명령(`COMMAND_LONG`): `보낸 sysid, 명령 번호, param1~7 x 1000` (NaN·무한대는 0) |
+| `TF_INFO` | 켤 때 | 끝에 `boot=sd/builtin/direct`, `boot_reason=<번호>` (SD 로더 `DESIGN_KO.md` 6장) |
+
+- 보드는 FC에 `DISTANCE_SENSOR` 20 Hz, `OPTICAL_FLOW` 20 Hz, `SYS_STATUS` 2 Hz를 요청한다. 노트북(`n6_fly.py`)이 같은 포트에 다른 간격을 요청하면 덮어써지므로, 보드는 위치·자세를 포함해 10초마다 다시 요청한다.
+- 노트북으로 넘기는 양: 거리센서 5 Hz, 광류·배터리 2 Hz까지(위치 5 Hz, 자세 2 Hz는 전과 같음).
+- 늘어나는 기록 양: 초당 약 2~3 kB. 256 MiB 파일로 10시간 이상.
+- PC 해석: `tools/frame_measure.py`가 위 줄을 `log.extra["A"]` 등으로 읽는다. 22칸 `C` 줄도 읽는다.
+
 ## 확인한 것과 안 한 것
 
 - PC: `python tag/test_fcl.py` 전부 통과(원본 시험 + 링크 끊김 시험 6개).

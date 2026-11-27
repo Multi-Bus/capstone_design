@@ -10,8 +10,9 @@ enum {
     MAV_V1 = 0xFE, MAV_V2 = 0xFD,
     MSG_HEARTBEAT = 0, MSG_ATTITUDE = 30, MSG_LOCAL_POSITION_NED = 32, MSG_COMMAND_LONG = 76, MSG_COMMAND_ACK = 77,
     MSG_SET_POSITION_TARGET_LOCAL_NED = 84,
+    MSG_SYS_STATUS = 1, MSG_OPTICAL_FLOW = 100, MSG_DISTANCE_SENSOR = 132,
     CRC_HEARTBEAT = 50, CRC_ATTITUDE = 39, CRC_LOCAL_POSITION_NED = 185, CRC_COMMAND_LONG = 152, CRC_COMMAND_ACK = 143,
-    CRC_SET_POSITION_TARGET = 143,
+    CRC_SET_POSITION_TARGET = 143, CRC_SYS_STATUS = 124, CRC_OPTICAL_FLOW = 175, CRC_DISTANCE_SENSOR = 85,
     CMD_DO_SET_MODE = 176, CMD_SET_MESSAGE_INTERVAL = 511,
     MAV_FRAME_BODY_NED = 8,
     /* 위치와 가속도, 기수 방향은 무시하고 속도와 회전 속도(0)만 쓴다 -> 기수 방향이 그대로 유지된다 */
@@ -22,8 +23,11 @@ enum {
     BLE_POSITION_MS = 190, BLE_ATTITUDE_MS = 490,
     POSITION_INTERVAL_US = 20000, ATTITUDE_INTERVAL_US = 100000,
     REQUEST_AFTER_MS = 1500, REQUEST_EVERY_MS = 2000,
+    /* 노트북(n6_fly.py)도 같은 포트에 간격을 요청해서 보드의 요청을 덮어쓴다. 기록 빈도를 지키려고 가끔 다시 요청한다.
+     * 노트북으로 넘기는 양은 아래 BLE_*_MS 로 따로 줄이므로 노트북 쪽은 달라지지 않는다 */
+    REASSERT_MS = 10000,
     STOP_REPEATS = 5, LAND_REPEATS = 3, REPEAT_MS = 100,
-    LINES = 8, LINE_MAX = 150,
+    LINES = 16, LINE_MAX = 150,
     READY_FRAMES = 100,            /* 시작 이만큼 전부터 "준비됨"을 본다 */
 };
 
@@ -34,6 +38,14 @@ struct parser {
 };
 
 struct seg { int16_t forward_cm, right_cm; uint16_t hold_ms; };
+
+/* 기록만 하려고 보드가 따로 요청하는 메시지 (위치와 자세는 아래 g 에서 따로 다룬다) */
+enum { EXTRA_RANGE, EXTRA_FLOW, EXTRA_POWER, EXTRAS };
+static const struct { uint8_t msg; uint32_t interval_us; uint16_t ble_ms; } extra_cfg[EXTRAS] = {
+    { MSG_DISTANCE_SENSOR, 50000, 190 },   /* 20 Hz 기록, 노트북에는 5 Hz 까지 (n6_fly.py --floor-height 가 쓴다) */
+    { MSG_OPTICAL_FLOW, 50000, 490 },      /* 20 Hz 기록 */
+    { MSG_SYS_STATUS, 500000, 490 },       /* 2 Hz 기록 (배터리 전압) */
+};
 
 /* 대본. 움직이는 줄은 거리만 적고, 걸리는 프레임 수는 속도로 정한다. 멈춰 있는 줄은 시간으로 적는다.
  *   1: 앞으로 2 m -> 5 s -> 원점 -> 5 s -> 오른쪽으로 2 m -> 5 s -> 원점 -> 5 s      (설계서 7.3 의 2, 3단계)
@@ -62,7 +74,9 @@ static struct {
     bool fc_seen, armed, have_position, have_attitude, position_new;
     uint32_t heartbeat_ms, mode, position_ms, attitude_ms, request_position_ms, request_attitude_ms;
     float x, y, z, vx, vy, vz, roll, pitch, yaw;
+    uint32_t position_fc_ms, attitude_fc_ms;    /* 비행 제어기의 time_boot_ms (FC 로그와 맞출 때) */
     uint32_t ble_position_ms, ble_attitude_ms;
+    struct { bool have; uint32_t rx_ms, request_ms, ble_ms; } extra[EXTRAS];
     /* 대본 */
     enum fcl_state state;
     bool have_control, latched;
@@ -210,28 +224,121 @@ static void send_land(void)
     send_command(CMD_DO_SET_MODE, 1.0f, (float)FCL_MODE_LAND); /* n6_fly.py 의 킬과 같은 명령 */
 }
 
-/* 비행 제어기에서 온 메시지 하나. 노트북으로 넘길지 돌려준다 */
-static bool on_fc_message(const uint8_t *frame, unsigned total, uint32_t now_ms)
+static uint32_t get_u32(const uint8_t *in)
+{
+    return (uint32_t)in[0] | ((uint32_t)in[1] << 8) | ((uint32_t)in[2] << 16) | ((uint32_t)in[3] << 24);
+}
+
+static uint16_t get_u16(const uint8_t *in)
+{
+    return (uint16_t)(in[0] | (in[1] << 8));
+}
+
+/* 기록용: 값 x 1000 을 정수로. 무한대, NaN, 아주 큰 값은 0 (기록 줄이 깨지지 않게) */
+static long milli(float value)
+{
+    return (value > -2.0e6f && value < 2.0e6f) ? (long)(value * 1000.0f) : 0L;
+}
+
+/* 메시지 하나의 번호를 읽고, 아는 메시지면 CRC 를 검사해 내용을 p 에 0 으로 채워 넣는다.
+ * 읽을 메시지가 아니거나 깨졌으면 거짓 (MAVLink 2 는 끝의 0 을 잘라 보낸다) */
+static bool read_payload(const uint8_t *frame, uint32_t *message, uint8_t *p, unsigned room)
 {
     const bool v2 = frame[0] == MAV_V2;
     const unsigned head = v2 ? 10U : 6U, length = frame[1];
-    const uint32_t message = v2 ? (uint32_t)frame[7] | ((uint32_t)frame[8] << 8) | ((uint32_t)frame[9] << 16) : frame[5];
-    const uint8_t sysid = frame[v2 ? 5 : 3], compid = frame[v2 ? 6 : 4];
+    *message = v2 ? (uint32_t)frame[7] | ((uint32_t)frame[8] << 8) | ((uint32_t)frame[9] << 16) : frame[5];
     uint8_t extra;
-    (void)total;
-    switch (message) {
+    switch (*message) {
     case MSG_HEARTBEAT: extra = CRC_HEARTBEAT; break;
     case MSG_ATTITUDE: extra = CRC_ATTITUDE; break;
     case MSG_LOCAL_POSITION_NED: extra = CRC_LOCAL_POSITION_NED; break;
     case MSG_COMMAND_ACK: extra = CRC_COMMAND_ACK; break;
-    default: return true;
+    case MSG_COMMAND_LONG: extra = CRC_COMMAND_LONG; break;
+    case MSG_SET_POSITION_TARGET_LOCAL_NED: extra = CRC_SET_POSITION_TARGET; break;
+    case MSG_SYS_STATUS: extra = CRC_SYS_STATUS; break;
+    case MSG_OPTICAL_FLOW: extra = CRC_OPTICAL_FLOW; break;
+    case MSG_DISTANCE_SENSOR: extra = CRC_DISTANCE_SENSOR; break;
+    default: return false;
     }
     const uint16_t crc = crc_of(frame + 1, head - 1U + length, extra);
     if (frame[head + length] != (uint8_t)crc || frame[head + length + 1U] != (uint8_t)(crc >> 8)) {
-        return true; /* 깨진 것은 읽지 않고 그대로 넘긴다(받는 쪽이 버린다) */
+        return false;
     }
-    uint8_t p[32] = { 0 };   /* MAVLink 2 는 끝의 0 을 잘라 보낸다. 0 으로 채워 읽는다 */
-    memcpy(p, frame + head, length < sizeof(p) ? length : sizeof(p));
+    memset(p, 0, room);
+    memcpy(p, frame + head, length < room ? length : room);
+    return true;
+}
+
+/* 기록만 하는 메시지 (거리센서, 광류, 배터리). 노트북으로 넘길지 돌려준다 */
+static bool on_extra(unsigned which, const uint8_t *p, uint32_t now_ms)
+{
+    char *line = line_slot();
+    if (line != NULL) {
+        if (which == EXTRA_RANGE) {
+            snprintf(line, LINE_MAX, "A,%lu,%lu,%u,%u,%u,%u,%u\r\n", (unsigned long)g.frame, (unsigned long)get_u32(p),
+                     (unsigned)get_u16(p + 8), (unsigned)get_u16(p + 4), (unsigned)get_u16(p + 6), (unsigned)p[12],
+                     (unsigned)p[38]);
+        } else if (which == EXTRA_FLOW) {
+            const uint64_t us = (uint64_t)get_u32(p) | ((uint64_t)get_u32(p + 4) << 32);
+            snprintf(line, LINE_MAX, "O,%lu,%lu,%d,%d,%ld,%ld,%ld,%u,%ld,%ld\r\n", (unsigned long)g.frame,
+                     (unsigned long)(us / 1000U), (int)(int16_t)get_u16(p + 20), (int)(int16_t)get_u16(p + 22),
+                     milli(get_float(p + 8)), milli(get_float(p + 12)), milli(get_float(p + 16)), (unsigned)p[25],
+                     milli(get_float(p + 26)), milli(get_float(p + 30)));
+        } else {
+            snprintf(line, LINE_MAX, "B,%lu,%u,%d,%d,%u,%u\r\n", (unsigned long)g.frame, (unsigned)get_u16(p + 14),
+                     (int)(int16_t)get_u16(p + 16), (int)(int8_t)p[30], (unsigned)get_u16(p + 12),
+                     (unsigned)get_u16(p + 18));
+        }
+    }
+    g.extra[which].have = true;
+    g.extra[which].rx_ms = now_ms;
+    if ((uint32_t)(now_ms - g.extra[which].ble_ms) < extra_cfg[which].ble_ms) {
+        return false;
+    }
+    g.extra[which].ble_ms = now_ms;
+    return true;
+}
+
+/* 노트북이 비행 제어기에 보낸 목표와 명령을 기록한다 (중계는 그대로) */
+static void on_gcs_message(const uint8_t *frame)
+{
+    uint32_t message;
+    uint8_t p[64];
+    if (!read_payload(frame, &message, p, sizeof(p))) {
+        return;
+    }
+    const uint8_t src = frame[frame[0] == MAV_V2 ? 5 : 3];
+    char *line = NULL;
+    if (message == MSG_SET_POSITION_TARGET_LOCAL_NED && (line = line_slot()) != NULL) {
+        snprintf(line, LINE_MAX, "G,%lu,%u,%lu,%u,%04X,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld\r\n", (unsigned long)g.frame,
+                 (unsigned)src, (unsigned long)get_u32(p), (unsigned)p[52], (unsigned)get_u16(p + 48),
+                 milli(get_float(p + 4)), milli(get_float(p + 8)), milli(get_float(p + 12)), milli(get_float(p + 16)),
+                 milli(get_float(p + 20)), milli(get_float(p + 24)), milli(get_float(p + 40) * 57.29578f) / 10,
+                 milli(get_float(p + 44) * 57.29578f) / 10);
+    } else if (message == MSG_COMMAND_LONG && (line = line_slot()) != NULL) {
+        snprintf(line, LINE_MAX, "M,%lu,%u,%u,%ld,%ld,%ld,%ld,%ld,%ld,%ld\r\n", (unsigned long)g.frame, (unsigned)src,
+                 (unsigned)get_u16(p + 28), milli(get_float(p)), milli(get_float(p + 4)), milli(get_float(p + 8)),
+                 milli(get_float(p + 12)), milli(get_float(p + 16)), milli(get_float(p + 20)), milli(get_float(p + 24)));
+    }
+}
+
+/* 비행 제어기에서 온 메시지 하나. 노트북으로 넘길지 돌려준다 */
+static bool on_fc_message(const uint8_t *frame, unsigned total, uint32_t now_ms)
+{
+    const bool v2 = frame[0] == MAV_V2;
+    const uint8_t sysid = frame[v2 ? 5 : 3], compid = frame[v2 ? 6 : 4];
+    const unsigned length = frame[1];
+    uint32_t message;
+    uint8_t p[64];
+    (void)total;
+    if (!read_payload(frame, &message, p, sizeof(p))) {
+        return true; /* 모르는 것과 깨진 것은 읽지 않고 그대로 넘긴다(받는 쪽이 버린다) */
+    }
+    for (unsigned i = 0; i < EXTRAS; ++i) {
+        if (message == extra_cfg[i].msg) {
+            return on_extra(i, p, now_ms);
+        }
+    }
     if (message == MSG_HEARTBEAT) {
         if (compid == MAV_COMP_AUTOPILOT && p[4] != MAV_TYPE_GCS) {
             if (!g.fc_seen) {
@@ -247,6 +354,7 @@ static bool on_fc_message(const uint8_t *frame, unsigned total, uint32_t now_ms)
         return true;
     }
     if (message == MSG_LOCAL_POSITION_NED) {
+        g.position_fc_ms = get_u32(p);
         g.x = get_float(p + 4);
         g.y = get_float(p + 8);
         g.z = get_float(p + 12);
@@ -262,6 +370,7 @@ static bool on_fc_message(const uint8_t *frame, unsigned total, uint32_t now_ms)
         return true;
     }
     if (message == MSG_ATTITUDE) {
+        g.attitude_fc_ms = get_u32(p);
         g.roll = get_float(p + 4);
         g.pitch = get_float(p + 8);
         g.yaw = get_float(p + 12);
@@ -271,6 +380,9 @@ static bool on_fc_message(const uint8_t *frame, unsigned total, uint32_t now_ms)
             return false;
         }
         g.ble_attitude_ms = now_ms;
+        return true;
+    }
+    if (message != MSG_COMMAND_ACK) {
         return true;
     }
     /* COMMAND_ACK: 보드가 보낸 명령에 대한 답은 노트북에 넘기지 않는다 */
@@ -320,8 +432,11 @@ void fcl_from_ble(const uint8_t *data, unsigned length, uint32_t now_ms)
 {
     for (unsigned i = 0; i < length; ++i) {
         LinkFs_OnGcsByte(&g.linkfs, data[i], now_ms);
-        if (feed(&g.from_ble, data[i], now_ms) && !g.io.to_fc(g.from_ble.data, g.from_ble.need)) {
-            ++g.fc_dropped;
+        if (feed(&g.from_ble, data[i], now_ms)) {
+            if (!g.io.to_fc(g.from_ble.data, g.from_ble.need)) {
+                ++g.fc_dropped;
+            }
+            on_gcs_message(g.from_ble.data);
         }
     }
 }
@@ -418,11 +533,11 @@ static void emit_state_line(bool sent, uint32_t now_ms)
     } else {
         n += snprintf(line + n, (size_t)(LINE_MAX - n), ",,,");
     }
-    snprintf(line + n, (size_t)(LINE_MAX - n), "%ld,%ld,%lu,%u,%u,%u,%d,%d,%u\r\n",
+    snprintf(line + n, (size_t)(LINE_MAX - n), "%ld,%ld,%lu,%u,%u,%u,%d,%d,%u,%lu,%lu\r\n",
              g.have_position ? (long)(uint32_t)(now_ms - g.position_ms) : -1L,
              g.have_attitude ? (long)(uint32_t)(now_ms - g.attitude_ms) : -1L, (unsigned long)g.mode,
              (unsigned)g.armed, (unsigned)g.state, (unsigned)g.row, 10 * (int)g.command_vx, 10 * (int)g.command_vy,
-             (unsigned)sent);
+             (unsigned)sent, (unsigned long)g.position_fc_ms, (unsigned long)g.attitude_fc_ms);
 }
 
 void fcl_control(uint32_t frame, const struct uwbf_control *ctl, bool log_ok, uint32_t now_ms)
@@ -546,19 +661,34 @@ void fcl_tick(uint32_t now_ms)
     if (g.fc_seen && !hb_ok) {
         g.fc_seen = false;
         g.have_position = g.have_attitude = false;
+        for (unsigned i = 0; i < EXTRAS; ++i) {
+            g.extra[i].have = false;
+        }
         event("fc_lost", 0, 0);
     }
     /* 위치와 자세가 안 오면 다시 요청한다 (노트북이 스트림을 껐다 켜면 요청이 지워진다) */
     if (hb_ok) {
-        if ((!g.have_position || (uint32_t)(now_ms - g.position_ms) > REQUEST_AFTER_MS) &&
+        if ((!g.have_position || (uint32_t)(now_ms - g.position_ms) > REQUEST_AFTER_MS ||
+             (uint32_t)(now_ms - g.request_position_ms) > REASSERT_MS) &&
             (uint32_t)(now_ms - g.request_position_ms) > REQUEST_EVERY_MS) {
             g.request_position_ms = now_ms;
             send_command(CMD_SET_MESSAGE_INTERVAL, (float)MSG_LOCAL_POSITION_NED, (float)POSITION_INTERVAL_US);
         }
-        if ((!g.have_attitude || (uint32_t)(now_ms - g.attitude_ms) > REQUEST_AFTER_MS) &&
+        if ((!g.have_attitude || (uint32_t)(now_ms - g.attitude_ms) > REQUEST_AFTER_MS ||
+             (uint32_t)(now_ms - g.request_attitude_ms) > REASSERT_MS) &&
             (uint32_t)(now_ms - g.request_attitude_ms) > REQUEST_EVERY_MS) {
             g.request_attitude_ms = now_ms;
             send_command(CMD_SET_MESSAGE_INTERVAL, (float)MSG_ATTITUDE, (float)ATTITUDE_INTERVAL_US);
+        }
+        /* 기록용 메시지: 한 tick 에 하나만 요청한다 (FC 쪽 UART 에 몰리지 않게) */
+        for (unsigned i = 0; i < EXTRAS; ++i) {
+            const uint32_t since = now_ms - g.extra[i].request_ms;
+            if ((!g.extra[i].have || (uint32_t)(now_ms - g.extra[i].rx_ms) > REQUEST_AFTER_MS || since > REASSERT_MS) &&
+                since > REQUEST_EVERY_MS) {
+                g.extra[i].request_ms = now_ms;
+                send_command(CMD_SET_MESSAGE_INTERVAL, (float)extra_cfg[i].msg, (float)extra_cfg[i].interval_us);
+                break;
+            }
         }
     }
     /* 앵커 1 의 Poll 이 끊겼다: 속도 0 을 보내고 그만둔다 */
@@ -591,4 +721,7 @@ void fcl_init(uint8_t tag_id, uint32_t frame_us, const struct fcl_io *io)
     g.mode = 0xFFFFFFFFUL;
     /* 첫 요청은 HEARTBEAT 를 보자마자 나가게 */
     g.request_position_ms = g.request_attitude_ms = 0U - (uint32_t)REQUEST_EVERY_MS - 1U;
+    for (unsigned i = 0; i < EXTRAS; ++i) {
+        g.extra[i].request_ms = 0U - (uint32_t)REQUEST_EVERY_MS - 1U;
+    }
 }
