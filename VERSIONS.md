@@ -36,7 +36,7 @@
 
 2026-11-27 4호기 보드(SN `0036004D…`)의 외부 플래시를 읽어 `firmware/nucleo/backup_0036004D_20261127.bin`에 백업했다(커밋하지 않음). 앞부분이 `n6_bridge_linkfs_FSBL-trusted.bin`과 같았다. 11-25 기록에는 이 SN이 2호기 보드로 적혀 있어 보드가 기체 사이에서 바뀐 것으로 보인다. 그 뒤 `n6_flight_tagf_v2lfs_id3-trusted.bin`(`firmware/uwb/n6_flight_tag/`)을 쓰고 다시 읽어 같은 것을 확인했다. 쓰기 전 RAM 실행에서 UWB 거리, SD 카드 응답(`card=1`, 기록 파일은 아직 없음), FC 하트비트 수신을 확인했다. 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 `n6_fly.py --no-arm`으로 BLE 연결, 노트북→FC(COMMAND_ACK), FC→노트북(HEARTBEAT, 상태줄)을 확인했고, 1.3 m 호버를 했다.
 
-2026-11-27 1호기 보드(SN `00230041…`)의 외부 플래시를 읽어 `firmware/nucleo/backup_00230041_20261127.bin`에 백업했다(커밋하지 않음). 들어 있던 것은 팀원 펌웨어 `tagf-v3.1`이었다(위 표의 `n6_bridge`는 그 전 기록). RAM 실행에서 `TF_READY`, SD(`ready=1`, `file=ok`, 앞 기록 뒤에 이어 씀), FC 하트비트 수신(10초에 24 kB, 오류 0)을 확인했다. 앵커가 꺼져 있어 UWB 거리는 확인하지 못했다. 그 뒤 `n6_flight_tagf_v2lfs_id0-trusted.bin`을 쓰고 다시 읽어 같은 것을 확인했다. 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 `n6_fly.py --no-arm`으로 BLE 연결과 양방향 통신을 확인했다.
+2026-11-27 1호기 보드(SN `00230041…`)의 외부 플래시를 읽어 `firmware/nucleo/backup_00230041_20261127.bin`에 백업했다(커밋하지 않음). 들어 있던 것은 팀원 펌웨어 `tagf-v3.1`이었다(위 표의 `n6_bridge`는 그 전 기록). RAM 실행에서 `TF_READY`, SD(`ready=1`, `file=ok`, 앞 기록 뒤에 이어 씀), FC 하트비트 수신(10초에 24 kB, 오류 0)을 확인했다. 앵커가 꺼져 있어 UWB 거리는 확인하지 못했다. 그 뒤 `n6_flight_tagf_v2lfs_id0-trusted.bin`을 쓰고 다시 읽어 같은 것을 확인했다. 비행 부팅(BOOT1 1-2, CN9 3-4) 뒤 `n6_fly.py --no-arm`으로 BLE 연결과 양방향 통신을 확인했고, 1.3 m 호버를 했다.
 
 ### FC 파라미터 (`fc/`)
 
