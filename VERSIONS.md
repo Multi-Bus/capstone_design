@@ -12,7 +12,7 @@
 | 3호기 | 미확인 | 미확인 | v3 |
 | 4호기 | n6_bridge | 4.7.3, base + `drone4.param` (높이 소스 거리센서) | v3 |
 | 5호기 | 미확인 | 미확인 | v3 |
-| 6호기 | UWB 태그 펌웨어 (2026-11-26 확인, 브리지 아님) | 4.7.3, base (`drone6_asis_20261120.param` 있음) | v3 |
+| 6호기 | n6_bridge + 링크 끊김 강제 DISARM (linkfs `b5674a42`, 2026-11-26 다시 씀) | 4.7.3, base + 고도 펜스 (`drone6_asis_20261120.param` 있음) | v3 |
 
 ## 부품별 상세
 
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | 1호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-21 |
 | 4호기 | `firmware/nucleo/release/n6_bridge_FSBL-trusted.bin` | `444f1e07f68cc54ae4c6c60269f2c02537c1355d1c2c8959f3ef0921f602e014` | 2026-11-26 |
-| 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-25 |
+| 6호기 | `firmware/nucleo/release/n6_bridge_linkfs_FSBL-trusted.bin` | `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654` | 2026-11-26 |
 
 `n6_bridge_linkfs_FSBL-trusted.bin`은 기존 브리지에 링크 끊김 강제 DISARM(`FSBL/Inc/link_failsafe.h`)을 더한 것이다. 노트북 하트비트가 12초 없고 FC가 LAND + 시동 ON이면 FC에 강제 DISARM을 보낸다. 해시 `b5674a42126de7cd28d08bcd44a2ce82ad8a7dd8fc0ede882cc02dc43c785654`. 노트북 하트비트가 5초 넘게 없고 FC가 LAND + 시동 ON을 9초 이어 가면 강제 DISARM한다. LAND 시간은 FC가 LAND로 바뀐 때부터 센다.
 
@@ -31,6 +31,8 @@
 2026-11-25 6호기에 처음 올린 판(`943b43dc…`)은 부팅하지 않았다. 서명할 때 `-align`을 빠뜨려 페이로드가 0x400이 아닌 0x240에 들어갔기 때문이다. 기존 브리지로 되돌린 뒤, `-align`을 넣어 다시 서명했다. 같은 명령으로 기존 소스를 서명하면 기존 릴리스 이미지와 헤더·페이로드가 같고, 무작위 패딩(바이트 169~576)만 다르다. 6호기의 이전 플래시(기존 브리지)는 `firmware/nucleo/backup_drone6_20261125.bin`에 백업했다(커밋하지 않음).
 
 2026-11-26 6호기 NUCLEO를 읽어 보니 위 표의 linkfs 브리지가 아니라 UWB 태그 거리 측정 펌웨어(DW3000 드라이버, `T2 LIBDECA DS-TWR role=initiator address=2`, 이미지 65,408바이트, 시작 주소 `0x3418cd65`)가 올라가 있었다. `firmware/nucleo/backup_drone6_20261126.bin`에 백업했고(커밋하지 않음) 브리지는 다시 쓰지 않았다. 같은 날 6호기는 배터리를 연결할 때 연기가 났다. FC는 USB 전원으로 IMU 두 개, 기압계가 정상이었다.
+
+2026-11-26 저녁 6호기 NUCLEO에 위 표의 linkfs 브리지(`b5674a42…`)를 다시 썼다. 다시 쓰기 전에는 NUCLEO LED2가 켜지고 LED1이 꺼져 있었고(전원을 다시 넣어도 같음), BLE로 붙어도 FC→노트북 하트비트 0개, FC `SERIAL4 RX` 0이었다. 쓰기 전 플래시는 개발 PC에 백업했다(커밋하지 않음). 쓰기는 STM32CubeProgrammer 2.24.0, 외부 로더 `MX25UM51245G_STM32N6570-NUCLEO.stldr`, `-hardRst -w … 0x70000000 -v`로 했고 `Download verified successfully`가 나왔다. 비행 구성으로 켜니 LED1이 깜빡이고 LED2는 꺼졌다. `gcs/tools/diag/n6_ro_check.py`로 BLE에 붙어 FC 하트비트 수신과 파라미터 응답(`MAV_GCS_SYSID`, `FS_GCS_ENABLE`, `FS_GCS_TIMEOUT`, `SERIAL4_BAUD`)을 확인했고, 그동안 FC `SERIAL4 RX`가 1,796바이트였다. 2026-11-27에 같은 점검을 다시 해도 양방향이 정상이었다.
 
 2026-11-26 4호기 NUCLEO에는 UWB 통신용 펌웨어(112,608바이트, 시작 주소 `0x34182c89`)가 올라가 있었다. 그 플래시를 `firmware/nucleo/backup_drone4_20261126.bin`에 백업하고(커밋하지 않음) 위 브리지를 다시 써서 검증(`-v`)했다.
 
@@ -42,7 +44,7 @@
 | 3호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone3.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`. 2026-11-26 `ATC_RAT_YAW_I` 0.018 → 0.03 직접 씀(이륙 때 요가 20~26° 밀려서), 읽어서 확인 | 2026-11-26 |
 | 4호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone4.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15` | 2026-11-23 |
 | 5호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` | `firmware/fc/drones/drone5.param`: `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`. 2026-11-25 고도 펜스(`FENCE_*`) 씀, 읽어서 확인 | 2026-11-25 |
-| 6호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` (47개 중 46개 일치). `MOT_THST_HOVER` 0.404 → 0.455로 직접 씀(2026-11-25 호버 로그 `ThO` 평균, 자동 학습이 안 됐음) | 파일 없음. FC 값 `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`는 아직 시험으로 확인하지 않음 | 2026-11-25 |
+| 6호기 | ArduCopter 4.7.3 | `firmware/fc/base/n6_base.param` (2026-11-27 53개 중 52개 일치, 다른 하나는 `MOT_THST_HOVER` 0.48). `MOT_THST_HOVER` 0.404 → 0.455로 직접 씀(2026-11-25 호버 로그 `ThO` 평균, 자동 학습이 안 됐음) | 파일 없음. FC 값 `FLOW_ORIENT_YAW 18000`, `SERVO_BLH_RVMASK 15`는 아직 시험으로 확인하지 않음. 2026-11-27 고도 펜스(`FENCE_*` 5개) 씀, 읽어서 확인(이전 값 `FENCE_ENABLE 0`, `FENCE_TYPE 7`, `FENCE_ALT_MAX 100`, `FENCE_ACTION 1`, `FENCE_MARGIN 2`) | 2026-11-27 |
 
 `EK3_SRC1_POSZ 2`(거리센서 높이)는 2026-11-23부터 `n6_base.param` 공통값이다. 4호기 호버 시험에서 확인했다.
 
