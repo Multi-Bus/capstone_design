@@ -51,7 +51,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 try:
     from bleak import BleakClient, BleakScanner
@@ -97,6 +97,7 @@ FORCE_DISARM_MAGIC = 21196
 LAND_REPEAT = 3                # 킬: LAND 명령을 3번
 LAND_REPEAT_GAP_S = 0.1        #      0.1 s 간격
 DOUBLE_X_WINDOW_S = 1.0
+EMERGENCY_STOP_REASON = "비상 모터 정지"
 STREAM_INTERVALS = (           # (메시지 ID, Hz)
     (mavlink2.MAVLINK_MSG_ID_LOCAL_POSITION_NED, 5),   # 32
     (mavlink2.MAVLINK_MSG_ID_DISTANCE_SENSOR, 5),      # 132
@@ -104,6 +105,9 @@ STREAM_INTERVALS = (           # (메시지 ID, Hz)
     (mavlink2.MAVLINK_MSG_ID_ATTITUDE, 10),            # 30 (롤/피치/요 -> *_att.csv)
 )
 RANGEFINDER_DOWN = mavlink2.MAV_SENSOR_ROTATION_PITCH_270  # 25 (RNGFND1_ORIENT)
+# Verified D6 floor-test configuration. Read-only checks before a trial.
+FLOOR_PARAMS = {"AHRS_EKF_TYPE": 3, "EK3_SRC1_POSZ": 2, "EK3_SRC1_VELXY": 5,
+                "WP_RFND_USE": 1, "GUID_OPTIONS": 0, "RNGFND1_ORIENT": RANGEFINDER_DOWN}
 YAW_RATE_DPS = 30.0            # 제자리 회전 속도 (CONDITION_YAW param2)
 YAW_REACHED_DEG = 5.0          # 목표 방위각과 이만큼 안이면 도달로 봄
 MOVE_REACHED_M = 0.1           # 이동 목표와 수평 거리가 이만큼 안이면 도달로 봄
@@ -253,7 +257,11 @@ class Console:
         self._status = text
         self._to_log(f"[상태] {text}")
         if self._live:
-            sys.stdout.write("\r\x1b[2K" + self._status_line())
+            # 좁은 터미널에서는 전체 상태를 줄바꿈해 자세와 전압도 볼 수 있게 한다.
+            sys.stdout.write("\r\x1b[2K" + text)
+            if self._status_line() != text:
+                sys.stdout.write("\n")
+                self._status = ""
         else:
             sys.stdout.write(f"{self._stamp(False)} [상태] {text}\n")
         sys.stdout.flush()
@@ -537,6 +545,9 @@ class FcState:
         self.lpn_t = 0.0
         self.rf_m: Optional[float] = None
         self.rf_t = 0.0
+        self.rf_floor_valid = False
+        self.rf_max_m = 0.0
+        self.rf_boot_ms: Optional[int] = None
         self.vbat: Optional[float] = None
         self.vbat_t = 0.0
         self.att: Optional[tuple] = None   # (롤, 피치, 요) 도. 요는 0~360
@@ -601,6 +612,8 @@ class N6Fly:
         self._yaw_target: Optional[float] = None   # 회전 시험 중 목표 방위각 (CSV 기록용)
         self._att_samples: Optional[list] = None   # 회전 뒤 멈춰 있는 동안 모으는 (롤, 피치, 요)
         self._att_csv = None
+        self._floor_test = getattr(args, "floor_height", False)
+        self._floor_baseline = None
         self._manual_on = False        # --manual 이동 키를 받는 중
         self._manual_busy = False      # 이동 중 (이때 누른 이동 키는 버림, 쌓지 않음)
         self._manual_req: Optional[tuple] = None
@@ -702,7 +715,18 @@ class N6Fly:
             s.lpn_x, s.lpn_y, s.lpn_z, s.lpn_t = msg.x, msg.y, msg.z, now
         elif mtype == "DISTANCE_SENSOR":
             if msg.orientation == RANGEFINDER_DOWN:
+                if self._floor_test:
+                    if msg.get_srcComponent() != FC_COMPID:
+                        return
+                    if s.rf_boot_ms is not None and not 0 < (msg.time_boot_ms - s.rf_boot_ms) % 2**32 < 2**31:
+                        return
+                s.rf_boot_ms = msg.time_boot_ms
                 s.rf_m, s.rf_t = msg.current_distance / 100.0, now
+                s.rf_max_m = msg.max_distance / 100.0
+                s.rf_floor_valid = (msg.get_srcComponent() == FC_COMPID and
+                                    0 < msg.current_distance < 65535 and
+                                    msg.min_distance <= msg.current_distance <= msg.max_distance and
+                                    getattr(msg, "signal_quality", 0) != 1)
         elif mtype == "ATTITUDE":
             self._on_attitude(msg, now)
         elif mtype == "SYS_STATUS":
@@ -727,7 +751,9 @@ class N6Fly:
         if self._att_csv is None:
             path = self.c.log_path.with_name(self.c.log_path.stem + "_att.csv")
             self._att_csv = open(path, "a", encoding="utf-8", buffering=1)
-            self._att_csv.write("time,phase,target_yaw_deg,roll_deg,pitch_deg,yaw_deg,ekf_h_m,rangefinder_m\n")
+            extra = (",fc_att_boot_ms,fc_rf_boot_ms,cmd_alt_m,fc_takeoff_frame,rf0_m,"
+                     "decision_floor_m,threshold_m" if self._floor_test else "")
+            self._att_csv.write("time,phase,target_yaw_deg,roll_deg,pitch_deg,yaw_deg,ekf_h_m,rangefinder_m" + extra + "\n")
             self.c.event(f"자세 기록: {path}")
         h = -s.lpn_z if (s.lpn_z is not None and self._fresh(s.lpn_t)) else None
         rf = s.rf_m if (s.rf_m is not None and self._fresh(s.rf_t)) else None
@@ -736,6 +762,12 @@ class N6Fly:
                  "" if tgt is None else f"{tgt:.1f}", f"{att[0]:.2f}", f"{att[1]:.2f}", f"{att[2]:.2f}",
                  "" if h is None else f"{h:.3f}", "" if rf is None else f"{rf:.3f}"]
         try:
+            if self._floor_test:
+                floor = self._floor_height()
+                cells.extend([str(msg.time_boot_ms), "" if s.rf_boot_ms is None else str(s.rf_boot_ms),
+                              str(self.a.alt), "FC_auto_unobserved",
+                              "" if self._floor_baseline is None else str(self._floor_baseline),
+                              "" if floor is None else str(floor), f"{self.a.alt - 0.1:.2f}"])
             self._att_csv.write(",".join(cells) + "\n")
         except Exception:
             pass
@@ -783,6 +815,9 @@ class N6Fly:
 
     # ---------------- 연결 / FC 설정 ----------------
     def _on_link_state(self, up: bool) -> None:
+        if self._floor_test:
+            self.s.rf_boot_ms = None
+            self.s.rf_floor_valid = False
         if up:
             self._link_up_at = time.monotonic()
             self.fs_checked = False
@@ -836,11 +871,12 @@ class N6Fly:
     async def _check_failsafe_params(self) -> None:
         # 한꺼번에 요청하면 FC 응답(PARAM_VALUE)이 몰려 와서 XIAO 구간에서 일부가 빠지는 것을
         # 실기에서 확인함 -> 하나씩 간격을 두고 요청하고, 못 받은 것만 최대 3번 다시 요청
-        for name in ("MAV_GCS_SYSID", "SYSID_MYGCS", "FS_GCS_ENABLE", "FS_GCS_TIMEOUT"):
+        floor_params = FLOOR_PARAMS if self._floor_test else {}
+        for name in ("MAV_GCS_SYSID", "SYSID_MYGCS", "FS_GCS_ENABLE", "FS_GCS_TIMEOUT", *floor_params):
             self.params.pop(name, None)
 
         def missing() -> List[str]:
-            want = ["FS_GCS_ENABLE", "FS_GCS_TIMEOUT"]
+            want = ["FS_GCS_ENABLE", "FS_GCS_TIMEOUT", *floor_params]
             if "MAV_GCS_SYSID" not in self.params and "SYSID_MYGCS" not in self.params:
                 want = ["MAV_GCS_SYSID", "SYSID_MYGCS"] + want   # 4.7 은 MAV_GCS_SYSID, 4.6 이하는 SYSID_MYGCS
             return [n for n in want if n not in self.params]
@@ -862,6 +898,11 @@ class N6Fly:
         fs_en = self.params.get("FS_GCS_ENABLE")
         fs_to = self.params.get("FS_GCS_TIMEOUT")
         problems, notes = [], []
+        for name, expected in floor_params.items():
+            if name not in self.params:
+                problems.append(f"{name} 못 읽음")
+            elif self.params[name] != expected:
+                problems.append(f"{name}={self.params[name]:g} (바닥 기준 시험 설정 {expected})")
         if sysid is None:
             problems.append("지상국 sysid(MAV_GCS_SYSID) 못 읽음 — t 를 다시 누르면 다시 읽음")
         elif int(sysid) != GCS_SYSID:
@@ -904,6 +945,13 @@ class N6Fly:
 
     def _fresh(self, t: float) -> bool:
         return t > 0 and time.monotonic() - t < FRESH_S
+
+    def _floor_height(self) -> Optional[float]:
+        s = self.s
+        if (s.rf_floor_valid and s.rf_t > 0 and 0 <= time.monotonic() - s.rf_t < 0.5
+                and self.a.alt < s.rf_max_m):
+            return s.rf_m
+        return None
 
     def height(self) -> Optional[float]:
         if self.s.lpn_z is not None and self._fresh(self.s.lpn_t):
@@ -1022,7 +1070,7 @@ class N6Fly:
             self.c.event("x: 1초 안에 x 를 한 번 더 누르면 모터 즉시 정지 (강제 DISARM). 공중이면 추락!")
             return
         self._last_x = 0.0
-        self._cancel_test("비상 모터 정지")
+        self._cancel_test(EMERGENCY_STOP_REASON)
         if not self.link.connected:
             self.c.event("비상 정지: BLE 끊김 상태라 못 보냄")
             return
@@ -1042,6 +1090,8 @@ class N6Fly:
     def _test_preconditions(self) -> List[str]:
         s = self.s
         why = []
+        if self._floor_test and self._floor_height() is None:
+            why.append("검증용 하향 거리센서 측정 없음/범위 초과")
         if self.a.no_arm:
             why.append("--no-arm 으로 실행 중")
         if not self.link.connected:
@@ -1256,6 +1306,8 @@ class N6Fly:
             raise TestAborted(f"모드가 {mode_name(s.custom_mode)}(으)로 바뀜")
         if self._guard_armed and not s.armed:
             raise TestAborted("시동이 꺼짐")
+        if self._floor_test and self._phase == "호버" and self._floor_height() is None:
+            raise TestFailed("호버 도중 하향 거리센서 무효/갱신 중단")
 
     async def _wait(self, cond: Callable[[], bool], timeout: float) -> bool:
         """cond 가 참이 될 때까지 기다림 (50 ms 마다 안전 조건도 검사)."""
@@ -1268,7 +1320,9 @@ class N6Fly:
                 return False
             await asyncio.sleep(0.05)
 
-    async def _takeoff_test(self) -> None:
+    async def _takeoff_test(
+        self, group_hover: Optional[Callable[["N6Fly", Callable[[], bool]], Awaitable[None]]] = None
+    ) -> None:
         a, s, c = self.a, self.s, self.c
         try:
             c.event(f"=== 이륙 시험 시작: {a.alt:.2f} m, 호버 {self._hover_txt()} (킬 = 스페이스/엔터/k) ===")
@@ -1312,9 +1366,18 @@ class N6Fly:
             # 실기: 모터가 돌기 시작하면 프롭 바람 때문에 기압계 기반 EKF 높이가 바닥에서도 0.1~0.2 m
             # 떨어져서, EKF 기준으로만 재면 7 cm 떴을 때 "0.24 m 도달" 로 잘못 판단했음.
             rf0 = s.rf_m if (s.rf_m is not None and self._fresh(s.rf_t)) else None
+            if self._floor_test:
+                self._floor_baseline = self._floor_height()
+                if self._floor_baseline is None or self._floor_baseline >= a.alt - 0.1:
+                    raise TestFailed("이륙 전 하향 거리 기준값 미확인 또는 이미 도달 범위")
+                c.event(f"바닥 기준 검증: 이륙 전 거리 {self._floor_baseline:.3f} m, "
+                        f"NAV_TAKEOFF {a.alt:.2f} m. FC 기준 자동 선택(직접 관측 불가), "
+                        "FC 제어 목표는 기내 CTUN.DAlt에 기록")
             c.event(f"    시동 확인 ({how})")
 
             self._phase = "이륙"
+            if group_hover:
+                self._check_guards()
             target = a.alt - 0.1
             c.event(f"3/6 이륙 명령 (목표 {a.alt:.2f} m, {target:.2f} m 넘으면 도달로 봄)")
             # 재전송 안 함: 첫 명령이 먹었는데 ACK 만 잃으면 재전송이 '이미 비행 중' 으로 거부됨
@@ -1324,6 +1387,8 @@ class N6Fly:
                 raise TestFailed(f"이륙 명령 거부 ({result_name(res)})")
 
             def climbed() -> Optional[float]:
+                if self._floor_test:
+                    return self._floor_height()
                 # 거리센서가 살아 있고 낮은 높이(4 m 미만)면 거리센서 기준 (지면에서 실제로 올라간 양)
                 if s.rf_m is not None and self._fresh(s.rf_t) and s.rf_m < 4.0:
                     return s.rf_m - (rf0 if rf0 is not None else 0.0)
@@ -1331,18 +1396,33 @@ class N6Fly:
                     return -(s.lpn_z - z0) if z0 is not None else -s.lpn_z
                 return None
 
+            def at_height() -> bool:
+                return (climbed() or 0.0) >= target
+
             t0 = time.monotonic()
-            reached = await self._wait(lambda: (climbed() or 0.0) >= target, 8.0)
+            reached = await self._wait(at_height, 8.0)
             h = climbed()
             h_txt = f"{h:.2f} m" if h is not None else "알 수 없음"
             if reached:
                 c.event(f"    {h_txt} 도달 ({time.monotonic() - t0:.1f} s)")
+            elif group_hover or self._floor_test:
+                raise TestFailed(f"8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt})")
             else:
                 c.event(f"    8초 안에 {target:.2f} m 도달 못 함 (현재 {h_txt}) — 그대로 호버 후 착륙")
 
-            self._phase = "호버"
-            c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
-            await self._wait(lambda: False, a.hover)
+            if group_hover:
+                def ready_to_hover() -> bool:
+                    if at_height():
+                        return True
+                    if time.monotonic() >= t0 + 8.0:
+                        raise TestFailed("8초 판정 기한 경과 후 공통 호버 상승 기준 미충족")
+                    return False
+
+                await group_hover(self, ready_to_hover)
+            else:
+                self._phase = "호버"
+                c.event(f"4/6 호버 {self._hover_txt()}" + (" — 내리려면 스페이스(킬 = LAND)" if a.hover == math.inf else ""))
+                await self._wait(lambda: False, a.hover)
             if getattr(a, "yaw", 0.0):
                 await self._yaw_test()
             if getattr(a, "move", 0.0):
@@ -1356,6 +1436,8 @@ class N6Fly:
             res = await self.command(mavlink2.MAV_CMD_DO_SET_MODE,
                                      mavlink2.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, MODE_LAND)
             if res is not None and res != ACCEPTED:
+                if group_hover:
+                    raise TestFailed(f"LAND 거부 ({result_name(res)})")
                 c.event(f"    ⚠ LAND 거부 ({result_name(res)}) — 스페이스(킬)로 다시 시도하세요")
             if res == ACCEPTED:
                 s.custom_mode = MODE_LAND
@@ -1363,6 +1445,8 @@ class N6Fly:
                 self._guard_mode = MODE_LAND   # 누가 LAND 를 풀면(조종기 등) 시험 종료
                 c.event("    LAND 확인")
             else:
+                if group_hover:
+                    raise TestFailed("5초 안에 LAND 확인 안 됨")
                 c.event("    ⚠ 5초 안에 LAND 확인 안 됨 — 스페이스(킬)로 다시 시도하세요")
 
             self._phase = "착지대기"
@@ -1372,11 +1456,17 @@ class N6Fly:
                 c.event("=== 시험 완료: 착지, 시동 꺼짐 ===")
             else:
                 c.event("⚠ 30초가 지나도 시동 상태 — 높이 확인 후 스페이스(킬), 바닥이면 x x 로 정지")
+                if group_hover:
+                    raise TestFailed("LAND 후 30초 동안 시동 해제 미확인")
         except TestAborted as e:
             if e.link:
                 self._land_after_relink = True
+            if group_hover:
+                raise
             c.event(f"■ 시험 중단: {e} — 자동으로 GUIDED 로 되돌리지 않음. 필요하면 스페이스(킬)")
         except TestFailed as e:
+            if group_hover:
+                raise
             c.event(f"■ 시험 실패: {e}")
             if s.armed and s.custom_mode == MODE_GUIDED and self.link.connected:
                 c.event("    시동 상태라 LAND 전송")
@@ -1389,6 +1479,7 @@ class N6Fly:
             self._guard_armed = False
             self._phase = ""
             self._yaw_target = None
+            self._floor_baseline = None
             self._att_samples = None
 
     # ---------------- 실행 ----------------
@@ -1440,6 +1531,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="N6 드론 BLE 비행 스크립트 (이륙 → 호버 → 착륙, 킬 = 스페이스)")
     p.add_argument("--name", default="N6-DRONE-1", help="XIAO BLE 광고 이름 (기본 N6-DRONE-1)")
+    p.add_argument("--floor-height", action="store_true",
+                   help="순정 GUIDED 이륙을 검증: 신선한 하향 거리 자체로 도달 판정")
     p.add_argument("--alt", type=float, default=0.8, help="이륙 높이 m (기본 0.8, 허용 0.3~1.6)")
     p.add_argument("--hover", type=float, default=5.0, help="호버 시간 s (기본 5, 허용 0~30)")
     p.add_argument("--hold", action="store_true",
